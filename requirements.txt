@@ -1,0 +1,10 @@
+streamlit
+chromadb
+sentence-transformers
+openai
+python-dotenv
+pydantic
+rich
+tqdm
+numpy
+scikit-learn
