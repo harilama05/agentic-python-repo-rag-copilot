@@ -1,9 +1,10 @@
-from src.config import REPOS_DIR
+from pathlib import Path
+
 from src.indexer import build_codebase_agent
 
 
 def main() -> None:
-    repo_path = REPOS_DIR / "sample_python_repo"
+    repo_path = Path("examples/sample_python_repo")
 
     print("Indexing repo...")
     indexed = build_codebase_agent(

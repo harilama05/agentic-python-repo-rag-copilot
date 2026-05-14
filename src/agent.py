@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from src.llm import GeminiLLM
+from src.prompts import SYSTEM_PROMPT, build_grounded_user_prompt
 from src.tools import CodebaseTools
 
 
@@ -85,23 +87,71 @@ def extract_symbol_candidate(question: str) -> Optional[str]:
 
 
 class CodebaseAgent:
-    def __init__(self, tools: CodebaseTools):
+    def __init__(
+        self,
+        tools: CodebaseTools,
+        llm: Optional[GeminiLLM] = None,
+        use_llm: bool = False,
+    ):
         self.tools = tools
+        self.llm = llm
+        self.use_llm = use_llm
 
     def answer(self, question: str) -> AgentResponse:
         query_type = classify_query(question)
         symbol = extract_symbol_candidate(question)
 
         if query_type == "reference_query" and symbol:
-            return self._answer_reference_query(question, symbol)
+            response = self._answer_reference_query(question, symbol)
 
-        if query_type == "location_query" and symbol:
-            return self._answer_location_query(question, symbol)
+        elif query_type == "location_query" and symbol:
+            response = self._answer_location_query(question, symbol)
 
-        if query_type == "explanation_query" and symbol:
-            return self._answer_explanation_query(question, symbol)
+        elif query_type == "explanation_query" and symbol:
+            response = self._answer_explanation_query(question, symbol)
 
-        return self._answer_search_query(question)
+        else:
+            response = self._answer_search_query(question)
+
+        return self._maybe_generate_llm_answer(response)
+
+    def _maybe_generate_llm_answer(self, response: AgentResponse) -> AgentResponse:
+        """
+        Replace the rule-based answer with an LLM-generated grounded answer
+        when LLM generation is enabled.
+        """
+        if not self.use_llm or self.llm is None:
+            return response
+
+        try:
+            user_prompt = build_grounded_user_prompt(
+                question=response.question,
+                query_type=response.query_type,
+                tools_used=response.tools_used,
+                raw_results=response.raw_results,
+            )
+
+            llm_answer = self.llm.generate(
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+            )
+
+            response.answer = llm_answer
+            response.raw_results["llm_enabled"] = True
+
+            return response
+
+        except Exception as exc:
+            response.raw_results["llm_enabled"] = False
+            response.raw_results["llm_error"] = str(exc)
+
+            response.answer = (
+                response.answer
+                + "\n\n"
+                + f"LLM answer generation failed: {exc}"
+            )
+
+            return response
 
     def _answer_reference_query(self, question: str, symbol: str) -> AgentResponse:
         tools_used = [f'find_references("{symbol}")']

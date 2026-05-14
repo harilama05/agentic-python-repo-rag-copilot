@@ -34,7 +34,7 @@ with st.sidebar:
 
     repo_path = st.text_input(
         "Python repo path",
-        value="data/repos/sample_python_repo",
+        value="examples/sample_python_repo",
         help="Enter a local path to a Python repository.",
     )
 
@@ -47,6 +47,11 @@ with st.sidebar:
         "Reset collection before indexing",
         value=True,
     )
+    use_llm = st.checkbox(
+        "Use LLM grounded answer generation",
+        value=False,
+        help="Requires GEMINI_API_KEY in .env",
+    )
 
     index_button = st.button("Index repository", type="primary")
 
@@ -57,6 +62,7 @@ with st.sidebar:
                     repo_path=repo_path,
                     collection_name=collection_name,
                     reset_collection=reset_collection,
+                    use_llm=use_llm,
                 )
 
                 st.session_state.indexed_codebase = indexed

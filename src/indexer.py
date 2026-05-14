@@ -1,3 +1,4 @@
+from src.llm import GeminiLLM
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,6 +42,7 @@ def build_codebase_agent(
     repo_path: str | Path,
     collection_name: str | None = None,
     reset_collection: bool = True,
+    use_llm: bool = False,
 ) -> IndexedCodebase:
     """
     Scan, parse, chunk, embed, and index a Python repo.
@@ -78,7 +80,14 @@ def build_codebase_agent(
 
     retriever = CodeRetriever(vector_store)
     tools = CodebaseTools(retriever=retriever, repo_root=repo_path)
-    agent = CodebaseAgent(tools=tools)
+
+    llm = GeminiLLM() if use_llm else None
+
+    agent = CodebaseAgent(
+        tools=tools,
+        llm=llm,
+        use_llm=use_llm,
+    )
 
     return IndexedCodebase(
         repo_path=repo_path,
