@@ -1,48 +1,46 @@
-from src.config import REPOS_DIR
-from src.indexer import build_codebase_agent
+"""
+Index a repository from the command line.
+
+Usage:
+    python -m scripts.index_repo --repo data/repos/sample_python_repo
+"""
+
+import argparse
+from src.indexing.repo_indexer import index_repository
 
 
-def main() -> None:
-    repo_path = REPOS_DIR / "sample_python_repo"
+def main():
+    parser = argparse.ArgumentParser(description="Index a Python repository")
+    parser.add_argument("--repo", required=True, help="Path to the repository")
+    parser.add_argument("--collection", default=None, help="Collection name")
+    parser.add_argument("--no-reset", action="store_true", help="Don't reset index")
+    parser.add_argument("--no-reranker", action="store_true", help="Disable reranker")
+    args = parser.parse_args()
 
-    print("Indexing repo...")
-    indexed = build_codebase_agent(
-        repo_path=repo_path,
-        collection_name="sample_python_repo",
-        reset_collection=True,
+    print(f"Indexing: {args.repo}")
+
+    indexed = index_repository(
+        repo_path=args.repo,
+        collection_name=args.collection,
+        reset=not args.no_reset,
+        use_reranker=not args.no_reranker,
     )
 
-    print(f"Repo path: {indexed.repo_path}")
-    print(f"Collection: {indexed.collection_name}")
-    print(f"Found {indexed.file_count} Python files")
-    print(f"Built {indexed.chunk_count} code chunks")
+    print(f"✅ Done!")
+    print(f"   Files: {indexed.file_count}")
+    print(f"   Chunks: {indexed.chunk_count}")
+    print(f"   Collection: {indexed.collection_name}")
 
+    # Quick test
+    print("\n--- Quick Test ---")
     questions = [
-        "Where is create_user implemented?",
-        "Where is create_user used?",
-        "What does UserService do?",
-        "Find code related to user creation",
+        "What functions are defined in this codebase?",
     ]
 
-    print("\nAgent tests:")
-
-    for question in questions:
-        response = indexed.agent.answer(question)
-
-        print("\n" + "=" * 100)
-        print("Question:", response.question)
-        print("Query type:", response.query_type)
-
-        print("\nTools used:")
-        for tool in response.tools_used:
-            print("-", tool)
-
-        print("\nAnswer:")
-        print(response.answer)
-
-        print("\nSources:")
-        for source in response.sources:
-            print("-", source)
+    for q in questions:
+        response = indexed.agent.invoke(q)
+        print(f"\nQ: {q}")
+        print(f"A: {response.answer[:200]}...")
 
 
 if __name__ == "__main__":

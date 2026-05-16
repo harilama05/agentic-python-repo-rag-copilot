@@ -1,655 +1,340 @@
-# Agentic RAG Copilot for Python Codebases
+# 🐍 Agentic RAG Codebase Assistant
 
-A read-only Agentic RAG copilot for Python repositories.
+Trợ lý AI thông minh cho các dự án Python, sử dụng kỹ thuật **Agentic RAG** (Retrieval-Augmented Generation) hiện đại.
 
-This project scans a Python codebase, extracts functions/classes/methods using Python AST, indexes code chunks into a vector database, and answers codebase questions using agent tools such as semantic code search, symbol lookup, reference tracing, and file reading.
-
-The goal is to help developers understand and navigate unfamiliar Python repositories faster.
+Hệ thống quét mã nguồn Python, trích xuất hàm/lớp/phương thức bằng AST, đánh chỉ mục vào cơ sở dữ liệu vector, và trả lời câu hỏi về codebase thông qua các công cụ agent: tìm kiếm ngữ nghĩa, tra cứu symbol, truy vết tham chiếu, và đọc file.
 
 ---
 
-## Overview
+## Tổng quan
 
-When working with a new Python codebase, developers often need to answer questions such as:
+Khi làm việc với một codebase Python mới, lập trình viên thường cần trả lời các câu hỏi như:
 
-```text
-Where is this function implemented?
-Where is this function used?
-What does this class do?
-Which files are related to a feature?
-Where does the request flow start?
+- Hàm này được định nghĩa ở đâu?
+- Hàm này được sử dụng ở những đâu?
+- Lớp này làm gì?
+- Những file nào liên quan đến tính năng X?
+
+Dự án này giải quyết vấn đề đó bằng cách biến một Python repository thành một cơ sở tri thức có thể tìm kiếm được.
+
 ```
-
-This project solves that problem by turning a Python repository into a searchable knowledge base.
-
-The system:
-
-```text
-Python repo
-→ scan .py files
-→ parse with Python AST
-→ extract functions/classes/methods
-→ create code chunks with metadata
-→ embed chunks
-→ store in ChromaDB
-→ retrieve relevant code
-→ use agent tools to answer questions with citations
+Repo Python → Quét file → Phân tích AST → Trích xuất symbol
+→ Chia chunk → Nhúng vector → Lưu ChromaDB
+→ Tìm kiếm lai (Vector + BM25 + Symbol) → Hợp nhất RRF
+→ Xếp hạng lại (Cross-Encoder) → Sinh câu trả lời (LLM)
 ```
 
 ---
 
-## Current Status
+## Tính năng chính
 
-This is the current MVP version.
+### 1. Quét Repository thông minh
+- Quét đệ quy thư mục, hỗ trợ `.py`, `.md`, `.txt`, `.json`, `.yaml`
+- Tự động bỏ qua `.git`, `__pycache__`, `.venv`, `node_modules`, v.v.
 
-Implemented:
+### 2. Phân tích AST (Abstract Syntax Tree)
+- Trích xuất hàm, lớp, phương thức, import, docstring
+- Trích xuất thêm **decorators** và **parameters**
+- Xác định số dòng bắt đầu/kết thúc chính xác
 
-- Python repository scanning
-- AST-based code parsing
-- Function/class/method extraction
-- Code chunking with metadata
-- Local vector indexing with ChromaDB
-- Local CPU embeddings with sentence-transformers
-- Hybrid retrieval:
-  - semantic vector search
-  - keyword matching
-  - symbol-aware reranking
-- Agent tools:
-  - `search_code(query)`
-  - `find_symbol(symbol_name)`
-  - `find_references(symbol_name)`
-  - `read_file(file_path, start_line, end_line)`
-- Rule-based agent workflow
-- Streamlit UI
-- File path and line number citations
+### 3. Chia chunk thông minh (AST-aware Chunking)
+- **Code**: Mỗi hàm/lớp/phương thức = 1 chunk với metadata preamble
+- **Markdown**: Chia theo heading (`#`, `##`, v.v.)
+- **Text**: Sliding-window với overlap và nhận diện ranh giới câu
 
-Not yet implemented:
+### 4. Tìm kiếm lai (Hybrid Search)
+| Chiến lược | Mô tả |
+|-----------|-------|
+| **Vector Search** | Tìm kiếm ngữ nghĩa qua ChromaDB (cosine similarity) |
+| **BM25 Keyword** | Tìm kiếm từ khóa chính xác (rất hiệu quả cho tên hàm) |
+| **Symbol Search** | Tra cứu trực tiếp metadata (nhanh nhất cho tên cụ thể) |
+| **RRF Fusion** | Hợp nhất kết quả từ 3 chiến lược bằng Reciprocal Rank Fusion |
 
-- LLM-based natural language answer generation
-- Evaluation metrics
-- Large real-world repository benchmarking
-- Incremental indexing
-- Multi-language support
-- Automatic code editing
+### 5. Xếp hạng lại (Reranking)
+- **Cross-Encoder**: Chấm điểm từng cặp (query, document) cho độ chính xác cao
+- **MMR**: Maximal Marginal Relevance — giảm trùng lặp trong kết quả
+
+### 6. Công cụ Agent
+| Công cụ | Chức năng |
+|---------|----------|
+| `search_code(query)` | Tìm kiếm lai toàn bộ codebase |
+| `find_symbol(name)` | Tra cứu hàm/lớp/phương thức theo tên |
+| `find_references(name)` | Tìm tất cả nơi sử dụng một symbol |
+| `read_file(path, start, end)` | Đọc nội dung file theo dòng |
+
+### 7. Pipeline Agent thông minh
+
+```
+Câu hỏi → Phân loại truy vấn → Chọn chiến lược tìm kiếm
+→ Tìm kiếm lai → Xếp hạng lại → Sinh câu trả lời → Trích dẫn nguồn
+```
+
+Hỗ trợ 4 loại truy vấn:
+- `location_query` — "Hàm X được định nghĩa ở đâu?"
+- `reference_query` — "Hàm X được sử dụng ở đâu?"
+- `explanation_query` — "Hàm X làm gì?"
+- `search_query` — Tìm kiếm chung
+
+### 8. Đánh giá chất lượng RAG
+- Tự động tạo bộ test từ metadata đã index
+- Metrics: Answer Relevancy, Retrieval Precision/Recall, Faithfulness
+- Tích hợp RAGAS (tùy chọn)
 
 ---
 
-## Features
+## Kiến trúc dự án
 
-### 1. Python Repository Scanner
-
-Scans a local Python repository and collects valid `.py` files while ignoring unnecessary folders such as:
-
-```text
-.git/
-.venv/
-venv/
-__pycache__/
-.pytest_cache/
-.mypy_cache/
-dist/
-build/
 ```
-
----
-
-### 2. AST-Aware Code Parsing
-
-Uses Python's built-in `ast` module to extract:
-
-- top-level functions
-- async functions
-- classes
-- class methods
-- imports
-- docstrings
-- line numbers
-
-Example extracted metadata:
-
-```json
-{
-  "file_path": "app/services/user_service.py",
-  "symbol_name": "create_user",
-  "qualified_name": "create_user",
-  "symbol_type": "function",
-  "start_line": 1,
-  "end_line": 5
-}
-```
-
----
-
-### 3. Code Chunking
-
-Each function, class, or method becomes a searchable chunk.
-
-A chunk contains:
-
-- source code
-- file path
-- symbol name
-- symbol type
-- start line
-- end line
-- parent class, if available
-- docstring, if available
-- imports, if available
-
-Example chunk:
-
-```text
-File: app/services/user_service.py
-Symbol: create_user
-Type: function
-Lines: 1-5
-
-Code:
-def create_user(email: str) -> dict:
-    return {
-        "email": email,
-        "is_active": True,
-    }
-```
-
----
-
-### 4. Vector Search
-
-Code chunks are embedded using a local sentence-transformers model and stored in ChromaDB.
-
-Default embedding model:
-
-```text
-sentence-transformers/all-MiniLM-L6-v2
-```
-
-This runs on CPU and does not require CUDA or GPU.
-
----
-
-### 5. Hybrid Retrieval
-
-Pure vector search is often not enough for code because code search needs exact symbol matching.
-
-This project combines:
-
-```text
-final_score =
-    vector_score
-  + keyword_score
-  + symbol_score
-```
-
-This helps prioritize exact symbols like:
-
-```text
-create_user
-UserService
-get_user
-```
-
-over loosely related chunks.
-
----
-
-### 6. Agent Tools
-
-The system exposes several code navigation tools.
-
-#### `search_code(query)`
-
-Finds code chunks related to a natural language query.
-
-Example:
-
-```text
-Find code related to user creation
-```
-
-#### `find_symbol(symbol_name)`
-
-Finds where a function, class, or method is defined.
-
-Example:
-
-```text
-find_symbol("create_user")
-```
-
-#### `find_references(symbol_name)`
-
-Finds where a symbol appears in the codebase.
-
-Example:
-
-```text
-find_references("create_user")
-```
-
-#### `read_file(file_path, start_line, end_line)`
-
-Reads a file or a specific line range with line numbers.
-
-Example:
-
-```text
-read_file("app/services/user_service.py", 1, 5)
-```
-
----
-
-## Why This Is Agentic RAG
-
-A basic RAG chatbot usually follows this flow:
-
-```text
-question → retrieve documents → generate answer
-```
-
-This project follows a tool-based workflow:
-
-```text
-question
-→ classify query type
-→ choose the right tool
-→ search code / find symbol / trace references / read file
-→ return grounded answer with sources
-```
-
-For example, when the user asks:
-
-```text
-Where is create_user used?
-```
-
-The system does not only run semantic search. It chooses the reference tracing tool:
-
-```text
-find_references("create_user")
-```
-
-This makes the system more suitable for codebase navigation than a normal document RAG chatbot.
-
----
-
-## Example Questions
-
-You can ask:
-
-```text
-Where is create_user implemented?
-
-Where is create_user used?
-
-What does UserService do?
-
-Find code related to user creation
-```
-
-Example output:
-
-```text
-Question:
-Where is create_user used?
-
-Answer:
-I found `create_user` in these locations:
-- `app/main.py:1` (reference) — `from app.services.user_service import create_user`
-- `app/main.py:5` (reference) — `user = create_user("alice@example.com")`
-- `app/services/user_service.py:1` (definition) — `def create_user(email: str) -> dict:`
-
-Tools used:
-- find_references("create_user")
-
-Sources:
-- app/main.py:1
-- app/main.py:5
-- app/services/user_service.py:1
-```
-
----
-
-## Project Architecture
-
-```text
-Python Repository
-        |
-        v
-Repo Scanner
-        |
-        v
-Python AST Parser
-        |
-        v
-Function/Class/Method Chunks
-        |
-        v
-Embedding Model
-        |
-        v
-Chroma Vector Database
-        |
-        v
-Hybrid Retriever
-        |
-        v
-Agent Tools
-        |
-        v
-Rule-Based Agent
-        |
-        v
-Streamlit UI
-```
-
----
-
-## RAG Pipeline
-
-### Offline Indexing Pipeline
-
-```text
-repo path
-→ scan Python files
-→ parse each file with AST
-→ extract symbols
-→ build code chunks
-→ embed chunks
-→ store chunks in ChromaDB
-```
-
-### Online Query Pipeline
-
-```text
-user question
-→ classify query type
-→ select tool
-→ retrieve relevant code
-→ return answer with citations
-```
-
-Supported query types:
-
-```text
-location_query
-reference_query
-explanation_query
-search_query
-```
-
-Example:
-
-```text
-Question:
-Where is create_user implemented?
-
-Query type:
-location_query
-
-Tool used:
-find_symbol("create_user")
-```
-
----
-
-## Tech Stack
-
-- Python 3.10
-- Streamlit
-- ChromaDB
-- sentence-transformers
-- PyTorch CPU
-- Python AST
-- NumPy
-- scikit-learn
-- Pydantic
-
-This project does not require GPU or CUDA.
-
----
-
-## Project Structure
-
-```text
 agentic-python-codebase-rag/
-  app/
-    __init__.py
-    streamlit_app.py
-
-  src/
-    __init__.py
-    config.py
-    scanner.py
-    ast_parser.py
-    chunker.py
-    embeddings.py
-    vector_store.py
-    retriever.py
-    tools.py
-    agent.py
-    indexer.py
-    evaluator.py
-    prompts.py
-
-  scripts/
-    __init__.py
-    index_repo.py
-    run_eval.py
-
-  data/
-    repos/
-    indexes/
-    eval_cases.json
-
-  tests/
-    test_scanner.py
-    test_chunker.py
-
-  notebooks/
-    experiments.ipynb
-
-  requirements.txt
-  README.md
-  .env.example
-  .gitignore
+├── app/                          # Giao diện Streamlit
+│   ├── streamlit_app.py          # Ứng dụng chính (all-in-one)
+│   └── pages/                    # Các trang phụ
+│
+├── api/                          # REST API (FastAPI)
+│   ├── main.py                   # App assembly + CORS
+│   ├── routes_health.py          # GET /health
+│   ├── routes_indexing.py        # POST /api/index/repository
+│   ├── routes_upload.py          # POST /api/upload/file
+│   └── routes_chat.py            # POST /api/chat/ask
+│
+├── src/                          # Thư viện lõi
+│   ├── config.py                 # Cấu hình trung tâm (pydantic-settings)
+│   ├── schemas.py                # Data models chuẩn (Pydantic)
+│   ├── constants.py              # Hằng số toàn cục
+│   │
+│   ├── ingestion/                # Thu thập dữ liệu
+│   │   ├── scanner.py            # Quét thư mục repo
+│   │   ├── file_loader.py        # Đọc file an toàn
+│   │   ├── file_type_detector.py # Phát hiện loại file
+│   │   ├── upload_handler.py     # Xử lý file upload
+│   │   └── document_registry.py  # Theo dõi file đã index (SHA-256)
+│   │
+│   ├── parsing/                  # Phân tích cú pháp
+│   │   ├── ast_parser.py         # Python AST parser
+│   │   ├── markdown_parser.py    # Markdown parser
+│   │   ├── text_parser.py        # Plain text parser
+│   │   ├── json_parser.py        # JSON parser
+│   │   └── yaml_parser.py        # YAML parser
+│   │
+│   ├── chunking/                 # Chia nhỏ nội dung
+│   │   ├── code_chunker.py       # AST-aware (1 symbol = 1 chunk)
+│   │   ├── text_chunker.py       # Sliding-window + overlap
+│   │   └── markdown_chunker.py   # Header-aware chunking
+│   │
+│   ├── embeddings/               # Nhúng vector
+│   │   ├── embedding_model.py    # SentenceTransformer wrapper
+│   │   └── embedding_cache.py    # Cache embeddings trên disk
+│   │
+│   ├── storage/                  # Lưu trữ
+│   │   ├── vector_store.py       # ChromaDB (cosine similarity)
+│   │   ├── keyword_store.py      # BM25 keyword search
+│   │   ├── file_store.py         # Nội dung file (JSON)
+│   │   └── metadata_store.py     # Metadata chunk (JSON)
+│   │
+│   ├── retrieval/                # Tìm kiếm
+│   │   ├── vector_search.py      # Tìm kiếm ngữ nghĩa
+│   │   ├── keyword_search.py     # Tìm kiếm từ khóa BM25
+│   │   ├── symbol_search.py      # Tra cứu symbol
+│   │   ├── rrf.py                # Reciprocal Rank Fusion
+│   │   ├── query_transform.py    # Phân loại & biến đổi truy vấn
+│   │   ├── hybrid_search.py      # Điều phối tìm kiếm lai
+│   │   └── retriever.py          # Facade chính
+│   │
+│   ├── reranking/                # Xếp hạng lại
+│   │   ├── cross_encoder_reranker.py  # Cross-encoder
+│   │   ├── mmr.py                # Maximal Marginal Relevance
+│   │   └── reranker.py           # Điều phối 2 giai đoạn
+│   │
+│   ├── agent/                    # Agent thông minh
+│   │   ├── state.py              # AgentState TypedDict
+│   │   ├── tool_schemas.py       # OpenAI function-calling schemas
+│   │   ├── tools.py              # Triển khai công cụ
+│   │   ├── router.py             # Phân loại & định tuyến
+│   │   └── graph.py              # State machine pipeline
+│   │
+│   ├── generation/               # Sinh câu trả lời
+│   │   ├── prompts.py            # System & user prompt templates
+│   │   ├── context_builder.py    # Xây dựng ngữ cảnh cho LLM
+│   │   ├── answer_generator.py   # Gọi LLM (OpenAI-compatible)
+│   │   └── citation_builder.py   # Xây dựng trích dẫn nguồn
+│   │
+│   ├── evaluation/               # Đánh giá chất lượng
+│   │   ├── metrics.py            # Metrics tùy chỉnh
+│   │   ├── ragas_eval.py         # Tích hợp RAGAS
+│   │   ├── eval_runner.py        # Chạy đánh giá hàng loạt
+│   │   └── testset_builder.py    # Tự động tạo bộ test
+│   │
+│   ├── metadata/                 # Quản lý metadata
+│   │   ├── id_generator.py       # Content-addressable chunk IDs
+│   │   ├── metadata_builder.py   # Xây metadata cho ChromaDB
+│   │   └── access_policy.py      # Chính sách truy cập
+│   │
+│   ├── security/                 # Bảo mật
+│   │   ├── file_validator.py     # Kiểm tra file upload
+│   │   ├── path_guard.py         # Chống path traversal
+│   │   └── permission_filter.py  # Lọc kết quả theo quyền
+│   │
+│   └── observability/            # Quan sát & debug
+│       ├── logger.py             # Structured logging
+│       ├── traces.py             # Tracing nhẹ
+│       └── usage_tracker.py      # Theo dõi sử dụng
+│
+├── scripts/                      # Scripts CLI
+│   ├── index_repo.py             # Index repo từ command line
+│   ├── seed_sample_repo.py       # Tạo repo mẫu để test
+│   ├── rebuild_index.py          # Xây lại index từ đầu
+│   └── run_eval.py               # Chạy đánh giá tự động
+│
+├── docker/                       # Docker
+│   ├── Dockerfile
+│   └── docker-compose.yml
+│
+├── data/                         # Dữ liệu
+│   ├── repos/                    # Repo được index
+│   ├── uploads/                  # File upload
+│   ├── indexes/                  # Chỉ mục (ChromaDB, BM25, metadata)
+│   └── eval/                     # Kết quả đánh giá
+│
+├── requirements.txt
+├── pyproject.toml
+├── .env.example
+└── .gitignore
 ```
 
 ---
 
-## Installation
+## Công nghệ sử dụng
 
-Clone the repository:
+| Thành phần | Công nghệ |
+|-----------|-----------|
+| Ngôn ngữ | Python 3.11+ |
+| Giao diện | Streamlit |
+| REST API | FastAPI + Uvicorn |
+| Vector DB | ChromaDB |
+| Embeddings | sentence-transformers (all-MiniLM-L6-v2) |
+| Reranking | Cross-Encoder (ms-marco-MiniLM-L-6-v2) |
+| Keyword Search | rank-bm25 |
+| LLM | OpenAI-compatible (GPT, Ollama, LM Studio) |
+| Data Models | Pydantic v2 |
+| Cấu hình | pydantic-settings + .env |
+| Logging | structlog |
+| Đánh giá | RAGAS (tùy chọn) |
+
+> Dự án chạy hoàn toàn trên **CPU**, không yêu cầu GPU hay CUDA.
+
+---
+
+## Cài đặt
 
 ```bash
+# Clone repo
 git clone https://github.com/your-username/agentic-python-codebase-rag.git
 cd agentic-python-codebase-rag
-```
 
-Create a virtual environment:
-
-```bash
+# Tạo môi trường ảo
 python -m venv .venv
-```
 
-Activate it on Windows PowerShell:
-
-```powershell
+# Kích hoạt (Windows PowerShell)
 .\.venv\Scripts\Activate.ps1
-```
 
-Upgrade pip:
-
-```bash
-python -m pip install --upgrade pip
-```
-
-Install dependencies:
-
-```bash
+# Cài đặt dependencies
 pip install -r requirements.txt
 ```
 
-If PyTorch or torchvision is missing, install the CPU version:
-
+Cấu hình (tùy chọn):
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Sao chép file cấu hình mẫu
+cp .env.example .env
+
+# Thêm API key nếu muốn dùng LLM sinh câu trả lời
+# OPENAI_API_KEY=sk-...
 ```
-
-Check that CUDA is not required:
-
-```bash
-python -c "import torch; print(torch.cuda.is_available())"
-```
-
-Expected output:
-
-```text
-False
-```
-
-This is normal. The project runs on CPU.
 
 ---
 
-## Running the App
+## Chạy ứng dụng
 
-Start the Streamlit UI:
+### Streamlit UI (khuyên dùng)
 
 ```bash
 python -m streamlit run app/streamlit_app.py
 ```
 
-Then open:
+Mở trình duyệt tại `http://localhost:8501`
 
-```text
-http://localhost:8501
-```
-
-In the sidebar, enter a Python repository path.
-
-Example:
-
-```text
-data/repos/sample_python_repo
-```
-
-Then click:
-
-```text
-Index repository
-```
-
-After indexing, ask questions such as:
-
-```text
-Where is create_user implemented?
-Where is create_user used?
-What does UserService do?
-Find code related to user creation
-```
-
----
-
-## Running from Script
-
-You can also test the system without the UI:
+### REST API
 
 ```bash
-python -m scripts.index_repo
+uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-This indexes the sample repository and runs several test questions.
+API docs tại `http://localhost:8000/docs`
 
----
+### Command Line
 
-## Sample Output
+```bash
+# Tạo repo mẫu để test
+python -m scripts.seed_sample_repo
 
-```text
-Question:
-Where is create_user implemented?
+# Index một repository
+python -m scripts.index_repo --repo data/repos/sample_python_repo
 
-Query type:
-location_query
-
-Tools used:
-- find_symbol("create_user")
-
-Answer:
-`create_user` is defined in:
-- `app/services/user_service.py:1-5` — `create_user` (function)
-
-Sources:
-- app/services/user_service.py:1-5
-```
-
-```text
-Question:
-Where is create_user used?
-
-Query type:
-reference_query
-
-Tools used:
-- find_references("create_user")
-
-Answer:
-I found `create_user` in these locations:
-- `app/main.py:1` (reference)
-- `app/main.py:5` (reference)
-- `app/services/user_service.py:1` (definition)
-
-Sources:
-- app/main.py:1
-- app/main.py:5
-- app/services/user_service.py:1
+# Chạy đánh giá
+python -m scripts.run_eval --repo data/repos/sample_python_repo
 ```
 
 ---
 
-## Limitations
+## Ví dụ sử dụng
 
-- Supports Python codebases only
-- Current agent workflow is rule-based
-- Current response generation is not yet LLM-powered
-- Reference search uses lightweight text matching
-- It is not a full language server
-- It does not modify code
-- It does not create pull requests
-- Large repositories may take longer to index on CPU
+### Câu hỏi: "Hàm create_user được sử dụng ở đâu?"
 
----
+```
+Loại truy vấn: reference_query
+Công cụ: find_references("create_user")
 
-## Future Improvements
+Kết quả:
+- service.py:12 (định nghĩa) — def create_user(name, email)
+- main.py:5   (tham chiếu)  — user = create_user("Alice", "alice@example.com")
+```
 
-Planned improvements:
+### Câu hỏi: "Lớp UserService làm gì?"
 
-- Add LLM-based natural language answer generation
-- Add retrieval evaluation metrics:
-  - retrieval hit rate
-  - citation accuracy
-  - answer groundedness
-- Improve reference tracing with AST-based call detection
-- Add FastAPI route analysis
-- Add better UI for retrieved chunks and tool traces
-- Add incremental indexing
-- Add support for larger real-world repositories
-- Add optional OpenAI/Gemini embedding backend
+```
+Loại truy vấn: explanation_query
+Công cụ: find_symbol("UserService") → search_code("UserService")
+
+Kết quả: Hiển thị mã nguồn và docstring của lớp UserService
+với trích dẫn file:dòng chính xác.
+```
 
 ---
 
-## What This Project Demonstrates
+## Kỹ thuật RAG hiện đại
 
-This project demonstrates:
-
-- RAG system design
-- Code-aware retrieval
-- AST-based parsing
-- Vector database usage
-- Hybrid retrieval
-- Agent tool design
-- Source-grounded answers
-- Streamlit application development
-- AI engineering workflow for codebase understanding
+| Kỹ thuật | Vị trí | Mục đích |
+|----------|--------|----------|
+| AST-based Chunking | `chunking/code_chunker.py` | Chunk theo đơn vị ngữ nghĩa |
+| Hybrid Search | `retrieval/hybrid_search.py` | Kết hợp Vector + BM25 + Symbol |
+| Reciprocal Rank Fusion | `retrieval/rrf.py` | Hợp nhất rankings từ nhiều nguồn |
+| Cross-Encoder Reranking | `reranking/cross_encoder_reranker.py` | Xếp hạng chính xác cao |
+| Maximal Marginal Relevance | `reranking/mmr.py` | Đa dạng hóa kết quả |
+| Incremental Indexing | `indexing/incremental_indexer.py` | Chỉ re-index file thay đổi |
+| Agentic Pipeline | `agent/graph.py` | State machine: route → retrieve → rerank → generate |
+| Embedding Cache | `embeddings/embedding_cache.py` | Tránh re-embed chunks không đổi |
 
 ---
+
+## Hạn chế hiện tại
+
+- Chỉ hỗ trợ codebase Python
+- Agent workflow dựa trên luật (chưa dùng LLM để chọn tool)
+- Tìm kiếm tham chiếu dùng regex (chưa dùng AST-based call graph)
+- Không chỉnh sửa code, không tạo pull request
+- Repo lớn có thể mất thời gian index trên CPU
+
+---
+
+## Giấy phép
+
+MIT License

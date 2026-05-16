@@ -1,21 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
 .venv/
 venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+env/
 
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
 .env
-.env.local
 
+# Data (indexes are generated, not tracked)
 data/indexes/
-data/repos/
+data/uploads/
+data/logs/
 
+# OS
 .DS_Store
-.ipynb_checkpoints/
-.pytest_cache/
-.mypy_cache/
-
-*.sqlite
-*.sqlite3
-*.db
+Thumbs.db
