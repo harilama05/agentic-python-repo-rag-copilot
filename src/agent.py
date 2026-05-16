@@ -22,19 +22,91 @@ STOPWORDS = {
     "implemented", "defined", "located", "what", "does", "do",
     "explain", "how", "works", "work", "function", "class", "method",
     "in", "of", "to", "for", "and", "or", "with",
-}
 
+    "là", "gì", "làm", "để", "dùng", "được", "ở", "đâu",
+    "giải", "thích", "hoạt", "động", "như", "thế", "nào",
+    "chức", "năng", "có", "tác", "dụng",
+}
 
 def classify_query(question: str) -> str:
     q = question.lower()
 
-    if any(phrase in q for phrase in ["used", "called", "references", "referenced"]):
+    documentation_phrases = [
+        "project",
+        "overview",
+        "setup",
+        "install",
+        "installation",
+        "architecture",
+        "tech stack",
+        "onboarding",
+        "readme",
+        "purpose",
+        "roadmap",
+        "dự án",
+        "tổng quan",
+        "cài đặt",
+        "cách chạy",
+        "kiến trúc",
+        "công nghệ",
+        "tech stack",
+        "để làm gì",
+        "dùng để làm gì",
+        "intern mới",
+        "người mới",
+        "đọc gì trước",
+    ]
+
+    reference_phrases = [
+        "used",
+        "called",
+        "references",
+        "referenced",
+        "được dùng",
+        "được sử dụng",
+        "dùng ở đâu",
+        "sử dụng ở đâu",
+        "gọi ở đâu",
+        "được gọi",
+        "tham chiếu",
+    ]
+
+    location_phrases = [
+        "where is",
+        "where are",
+        "implemented",
+        "defined",
+        "located",
+        "ở đâu",
+        "nằm ở đâu",
+        "định nghĩa ở đâu",
+        "implement ở đâu",
+        "được implement",
+        "được định nghĩa",
+    ]
+
+    explanation_phrases = [
+        "what does",
+        "explain",
+        "how does",
+        "how do",
+        "làm gì",
+        "giải thích",
+        "hoạt động như thế nào",
+        "chức năng gì",
+        "có tác dụng gì",
+    ]
+
+    if any(phrase in q for phrase in reference_phrases):
         return "reference_query"
 
-    if any(phrase in q for phrase in ["where is", "where are", "implemented", "defined", "located"]):
+    if any(phrase in q for phrase in location_phrases):
         return "location_query"
 
-    if any(phrase in q for phrase in ["what does", "explain", "how does", "how do"]):
+    if any(phrase in q for phrase in documentation_phrases):
+        return "documentation_query"
+
+    if any(phrase in q for phrase in explanation_phrases):
         return "explanation_query"
 
     return "search_query"
@@ -109,6 +181,9 @@ class CodebaseAgent:
 
         elif query_type == "explanation_query" and symbol:
             response = self._answer_explanation_query(question, symbol)
+
+        elif query_type == "documentation_query":
+            response = self._answer_documentation_query(question)
 
         else:
             response = self._answer_search_query(question)
@@ -358,6 +433,55 @@ class CodebaseAgent:
         return AgentResponse(
             question=question,
             query_type="search_query",
+            answer="\n".join(lines),
+            tools_used=tools_used,
+            sources=sources,
+            raw_results={"search_results": search_results},
+        )
+    def _answer_documentation_query(self, question: str) -> AgentResponse:
+        tools_used = [f'search_code("{question}")']
+        search_results = self.tools.search_code(question, top_k=5)
+
+        if not search_results:
+            answer = (
+                "I could not find README or documentation context for this repository. "
+                "You can still ask code-level questions about functions, classes, and references."
+            )
+
+            return AgentResponse(
+                question=question,
+                query_type="documentation_query",
+                answer=answer,
+                tools_used=tools_used,
+                sources=[],
+                raw_results={"search_results": []},
+            )
+
+        lines = ["I found these relevant documentation/code locations:"]
+        sources = []
+
+        for result in search_results:
+            source_type = result.get("source_type") or "unknown"
+            symbol = result.get("qualified_name") or result.get("heading")
+
+            lines.append(
+                f"- `{result['relative_path']}:{result['start_line']}-{result['end_line']}` "
+                f"— `{symbol}` ({source_type})"
+            )
+
+            sources.append(
+                {
+                    "relative_path": result["relative_path"],
+                    "line_start": result["start_line"],
+                    "line_end": result["end_line"],
+                    "symbol": symbol,
+                    "type": source_type,
+                }
+            )
+
+        return AgentResponse(
+            question=question,
+            query_type="documentation_query",
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,

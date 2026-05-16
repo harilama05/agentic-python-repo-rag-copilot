@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from rank_bm25 import BM25Okapi
+
 from src.vector_store import CodeVectorStore, SearchResult
 
 
@@ -11,6 +13,7 @@ class CodeSearchResult:
     text: str
     metadata: Dict[str, Any]
     vector_score: float
+    bm25_score: float
     keyword_score: float
     symbol_score: float
     final_score: float
@@ -19,6 +22,7 @@ class CodeSearchResult:
 def _tokenize(text: str) -> List[str]:
     """
     Simple tokenizer for natural language and code identifiers.
+    Splits snake_case and non-alphanumeric characters.
     """
     text = text.replace("_", " ")
     text = re.sub(r"[^a-zA-Z0-9]+", " ", text)
@@ -52,8 +56,6 @@ def _score_symbol_match(query: str, metadata: Dict[str, Any]) -> float:
     overlap = query_tokens.intersection(symbol_tokens)
     score = len(overlap) / len(query_tokens)
 
-    # Extra boost if the query seems to ask for a function/class/method
-    # and the chunk type matches.
     if "function" in query_tokens and symbol_type in {"function", "async_function"}:
         score += 0.25
 
@@ -66,11 +68,26 @@ def _score_symbol_match(query: str, metadata: Dict[str, Any]) -> float:
     return min(score, 1.0)
 
 
+def _normalize_scores(scores: List[float]) -> List[float]:
+    if not scores:
+        return []
+
+    min_score = min(scores)
+    max_score = max(scores)
+
+    if max_score == min_score:
+        return [0.0 for _ in scores]
+
+    return [(score - min_score) / (max_score - min_score) for score in scores]
+
+
 class CodeRetriever:
     """
-    Hybrid-ish retriever:
-    - gets candidates from vector search
-    - reranks using keyword overlap and symbol metadata
+    Hybrid retriever:
+    - vector search from ChromaDB
+    - BM25 lexical scoring
+    - keyword overlap scoring
+    - symbol-aware scoring
     """
 
     def __init__(self, vector_store: CodeVectorStore):
@@ -87,18 +104,28 @@ class CodeRetriever:
             top_k=candidate_k,
         )
 
+        if not vector_results:
+            return []
+
+        documents = [result.text for result in vector_results]
+        tokenized_documents = [_tokenize(doc) for doc in documents]
+        tokenized_query = _tokenize(query)
+
+        bm25 = BM25Okapi(tokenized_documents)
+        raw_bm25_scores = bm25.get_scores(tokenized_query).tolist()
+        normalized_bm25_scores = _normalize_scores(raw_bm25_scores)
+
         reranked: List[CodeSearchResult] = []
 
-        for result in vector_results:
+        for result, bm25_score in zip(vector_results, normalized_bm25_scores):
             keyword_score = _score_keyword_match(query, result.text)
             symbol_score = _score_symbol_match(query, result.metadata)
 
-            # Vector score from Chroma can be small/negative depending on distance.
-            # We combine it with stronger symbolic signals for code search.
             final_score = (
-                0.45 * result.score
-                + 0.25 * keyword_score
-                + 0.30 * symbol_score
+                0.40 * result.score
+                + 0.30 * bm25_score
+                + 0.20 * symbol_score
+                + 0.10 * keyword_score
             )
 
             reranked.append(
@@ -107,6 +134,7 @@ class CodeRetriever:
                     text=result.text,
                     metadata=result.metadata,
                     vector_score=result.score,
+                    bm25_score=bm25_score,
                     keyword_score=keyword_score,
                     symbol_score=symbol_score,
                     final_score=final_score,

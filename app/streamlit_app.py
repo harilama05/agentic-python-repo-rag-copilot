@@ -4,13 +4,13 @@ from src.indexer import build_codebase_agent
 
 
 st.set_page_config(
-    page_title="Agentic RAG Copilot for Python Codebases",
+    page_title="Agentic RAG Copilot for Python Repositories",
     page_icon="🐍",
     layout="wide",
 )
 
 
-st.title("🐍 Agentic RAG Copilot for Python Codebases")
+st.title("🐍 Agentic RAG Copilot for Python Repositories")
 
 st.markdown(
     """
@@ -32,16 +32,42 @@ if "chat_history" not in st.session_state:
 with st.sidebar:
     st.header("Repository Indexing")
 
-    repo_path = st.text_input(
-        "Python repo path",
-        value="examples/sample_python_repo",
-        help="Enter a local path to a Python repository.",
+    repo_mode = st.radio(
+        "Repository mode",
+        options=["Custom Repo", "Company Repo"],
+        index=0,
     )
 
-    collection_name = st.text_input(
-        "Collection name",
-        value="sample_python_repo",
-    )
+    if repo_mode == "Custom Repo":
+        repo_path = st.text_input(
+            "Python repo path",
+            value="examples/sample_python_repo",
+            help="Enter a local path to a Python repository.",
+        )
+
+        collection_name = st.text_input(
+            "Collection name",
+            value="custom_repo",
+        )
+
+    else:
+        from src.company_repos import get_company_repo_options, get_company_repo
+
+        company_options = get_company_repo_options()
+        selected_name = st.selectbox(
+            "Select company repo",
+            options=list(company_options.keys()),
+        )
+
+        selected_repo_id = company_options[selected_name]
+        selected_repo = get_company_repo(selected_repo_id)
+
+        st.caption(selected_repo.description)
+
+        repo_path = str(selected_repo.path)
+        collection_name = selected_repo.repo_id
+
+        st.write(f"Repo path: `{repo_path}`")
 
     reset_collection = st.checkbox(
         "Reset collection before indexing",
@@ -69,8 +95,10 @@ with st.sidebar:
                 st.session_state.chat_history = []
 
                 st.success("Repository indexed successfully!")
-                st.write(f"Files: {indexed.file_count}")
-                st.write(f"Chunks: {indexed.chunk_count}")
+                st.write(f"Python files indexed: {indexed.file_count}")
+                st.write(f"Documentation files indexed: {indexed.doc_count}")
+                st.write(f"Other files ignored: {indexed.ignored_file_count}")
+                st.write(f"Total chunks: {indexed.chunk_count}")
                 st.write(f"Collection: {indexed.collection_name}")
 
             except Exception as exc:
@@ -98,16 +126,21 @@ if indexed is None:
 
 st.subheader("Indexed Repository")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.metric("Python files", indexed.file_count)
 
 with col2:
-    st.metric("Code chunks", indexed.chunk_count)
+    st.metric("Docs", indexed.doc_count)
 
 with col3:
-    st.metric("Collection", indexed.collection_name)
+    st.metric("Ignored files", indexed.ignored_file_count)
+
+with col4:
+    st.metric("Total chunks", indexed.chunk_count)
+
+st.caption(f"Collection: {indexed.collection_name}")
 
 
 st.divider()
@@ -151,17 +184,50 @@ for response in reversed(st.session_state.chat_history):
     st.markdown("### Sources")
 
     if response.sources:
-        for source in response.sources:
-            relative_path = source.get("relative_path")
+        for idx, source in enumerate(response.sources, start=1):
+            relative_path = source.get("relative_path", "")
+            relative_path = relative_path.replace("\\", "/")
+
             line_start = source.get("line_start")
             line_end = source.get("line_end")
+
+            symbol = source.get("symbol")
+            source_type = source.get("type")
 
             if line_start == line_end:
                 citation = f"{relative_path}:{line_start}"
             else:
                 citation = f"{relative_path}:{line_start}-{line_end}"
 
-            st.write(f"- `{citation}`")
+            if symbol:
+                label = f"`{citation}` — `{symbol}`"
+            elif source_type:
+                label = f"`{citation}` — {source_type}"
+            else:
+                label = f"`{citation}`"
+
+            st.markdown(f"**{idx}. {label}**")
+
+            try:
+                file_content = indexed.tools.read_file(
+                    file_path=relative_path,
+                    start_line=line_start,
+                    end_line=line_end,
+                    context_lines=0,
+                )
+
+                with st.expander("View source excerpt"):
+                    language = "python"
+
+                    if str(relative_path).lower().endswith((".md", ".markdown")):
+                        language = "markdown"
+
+                    st.code(file_content["content"], language=language)
+
+            except Exception:
+                with st.expander("View source metadata"):
+                    st.json(source)
+
     else:
         st.write("No sources found.")
 

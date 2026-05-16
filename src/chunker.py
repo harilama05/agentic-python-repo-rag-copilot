@@ -152,6 +152,7 @@ def build_code_chunks(
 
         metadata = {
             "chunk_id": chunk_id,
+            "source_type": "code",
             "file_path": str(file_path),
             "relative_path": relative_path,
             "symbol_name": symbol.name,

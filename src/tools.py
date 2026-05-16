@@ -10,15 +10,18 @@ def format_search_result(result: CodeSearchResult) -> Dict[str, Any]:
 
     return {
         "chunk_id": result.chunk_id,
+        "source_type": metadata.get("source_type"),
         "file_path": metadata.get("file_path"),
         "relative_path": metadata.get("relative_path"),
         "symbol_name": metadata.get("symbol_name"),
         "qualified_name": metadata.get("qualified_name"),
         "symbol_type": metadata.get("symbol_type"),
+        "heading": metadata.get("heading"),
         "start_line": metadata.get("start_line"),
         "end_line": metadata.get("end_line"),
         "final_score": result.final_score,
         "vector_score": result.vector_score,
+        "bm25_score": result.bm25_score,
         "keyword_score": result.keyword_score,
         "symbol_score": result.symbol_score,
         "text": result.text,

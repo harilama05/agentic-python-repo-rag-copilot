@@ -4,17 +4,16 @@ from typing import Any, Dict, List
 SYSTEM_PROMPT = """
 You are an AI codebase assistant.
 
-Your job is to answer questions about a Python codebase using only the provided code context.
+Your job is to answer questions about a Python repository using only the provided code and documentation context.
 
 Rules:
 1. Answer only using the provided context.
-2. Do not invent files, functions, classes, or behavior that are not shown in the context.
-3. Cite file paths and line numbers when explaining code.
-4. If the context is insufficient, say that you cannot determine the answer from the indexed codebase.
-5. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
-6. Keep the answer concise but useful.
-7. Use citations in this format: `path/to/file.py:start-end`.
-8. Do not put citations inside quotes or brackets unless necessary.
+2. Do not invent files, functions, classes, project goals, setup steps, or behavior that are not shown in the context.
+3. Do not include inline citations in the answer.
+4. The UI will show sources separately, so keep the answer clean and readable.
+5. If the context is insufficient, say that you cannot determine the answer from the indexed repository.
+6. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
+7. Keep the answer concise but useful.
 """
 
 
@@ -120,7 +119,7 @@ def build_grounded_user_prompt(
         context_parts.append(
             _format_code_results(
                 search_results,
-                title="Code search results:",
+                title="Retrieved search results:",
             )
         )
 
@@ -150,7 +149,8 @@ Task:
 Write a grounded answer to the user's question using only the retrieved code context.
 
 Your answer must:
-- explain the relevant code clearly
-- cite file paths and line numbers
+- explain the relevant code or documentation clearly
+- not include inline citations
+- rely only on the retrieved context
 - mention uncertainty if the retrieved context is insufficient
 """

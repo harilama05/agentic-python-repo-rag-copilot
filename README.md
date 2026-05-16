@@ -1,57 +1,96 @@
-# Agentic RAG Copilot for Python Codebases
+# Agentic RAG Copilot for Python Repositories
 
-A read-only Agentic RAG copilot for Python repositories.
+A two-mode Agentic RAG copilot for Python repositories.
 
-This project scans a Python codebase, extracts functions/classes/methods using Python AST, indexes code chunks into a vector database, and answers codebase questions using agent tools such as semantic code search, symbol lookup, reference tracing, and file reading.
-
-The goal is to help developers understand and navigate unfamiliar Python repositories faster.
+This project helps users understand Python repositories faster by indexing both source code and project documentation. It supports custom user-provided Python repos and predefined company Python repos. The system retrieves relevant code/docs, uses agent tools, and generates grounded answers with file path and line number citations.
 
 ---
 
 ## Overview
 
-When working with a new Python codebase, developers often need to answer questions such as:
+Developers, interns, or new team members often need to answer questions like:
 
 ```text
+What does this project do?
+How do I set up this repository?
 Where is this function implemented?
 Where is this function used?
 What does this class do?
 Which files are related to a feature?
-Where does the request flow start?
 ```
 
-This project solves that problem by turning a Python repository into a searchable knowledge base.
+This project turns a Python repository into a searchable knowledge base.
 
-The system:
+It indexes:
 
 ```text
-Python repo
-→ scan .py files
-→ parse with Python AST
-→ extract functions/classes/methods
-→ create code chunks with metadata
-→ embed chunks
-→ store in ChromaDB
-→ retrieve relevant code
-→ use agent tools to answer questions with citations
+1. Python source code
+   - .py files
+   - functions
+   - classes
+   - methods
+   - imports
+   - line numbers
+
+2. Repository documentation
+   - README.md
+   - docs/*.md
+   - docs/*.markdown
 ```
+
+Then it uses hybrid retrieval and agent tools to answer questions with grounded sources.
+
+---
+
+## Repository Modes
+
+The system supports two repository modes.
+
+### 1. Custom Repo Mode
+
+Users can enter a local Python repository path manually.
+
+Example:
+
+```text
+D:\Work\some_python_repo
+```
+
+The system indexes that repository and allows users to ask questions about its code and documentation.
+
+### 2. Company Repo Mode
+
+Users can select a predefined company Python repository from the UI.
+
+Example:
+
+```text
+TaskFlow API
+```
+
+Company repos use the same indexing and retrieval pipeline as custom repos. The only difference is that their paths are registered in the project.
 
 ---
 
 ## Current Status
 
-This is the current MVP version.
+This is the current MVP/portfolio version.
 
 Implemented:
 
+- Custom Repo Mode
+- Company Repo Mode
 - Python repository scanning
-- AST-based code parsing
+- Markdown documentation scanning
+- AST-based Python code parsing
 - Function/class/method extraction
+- README/docs chunking
 - Code chunking with metadata
 - Local vector indexing with ChromaDB
-- Local CPU embeddings with sentence-transformers
+- Local CPU embeddings with `sentence-transformers`
 - Hybrid retrieval:
   - semantic vector search
+  - BM25 lexical scoring
   - keyword matching
   - symbol-aware reranking
 - Agent tools:
@@ -59,18 +98,23 @@ Implemented:
   - `find_symbol(symbol_name)`
   - `find_references(symbol_name)`
   - `read_file(file_path, start_line, end_line)`
-- Rule-based agent workflow
+- Rule-based agent routing
+- Optional Gemini LLM grounded answer generation
 - Streamlit UI
 - File path and line number citations
+- Source excerpt viewer in UI
+- Lightweight evaluation script
 
 Not yet implemented:
 
-- LLM-based natural language answer generation
-- Evaluation metrics
-- Large real-world repository benchmarking
+- Multi-language codebase support
+- Jupyter notebook indexing
+- Dockerfile/YAML/JSON/config indexing
+- Full language-server-level reference tracing
 - Incremental indexing
-- Multi-language support
+- Large real-world repository benchmarking
 - Automatic code editing
+- Pull request generation
 
 ---
 
@@ -78,7 +122,7 @@ Not yet implemented:
 
 ### 1. Python Repository Scanner
 
-Scans a local Python repository and collects valid `.py` files while ignoring unnecessary folders such as:
+The system scans a local repository and collects valid Python files while ignoring unnecessary folders such as:
 
 ```text
 .git/
@@ -91,11 +135,67 @@ dist/
 build/
 ```
 
+Indexed code files:
+
+```text
+*.py
+```
+
+Ignored code/file types include:
+
+```text
+.ipynb
+.js
+.ts
+.java
+.go
+.cpp
+.html
+.css
+.json
+.yaml
+.yml
+Dockerfile
+requirements.txt
+pyproject.toml
+.env
+binary files
+image files
+```
+
+These files are ignored by the current version unless explicitly supported later.
+
 ---
 
-### 2. AST-Aware Code Parsing
+### 2. Markdown Documentation Scanner
 
-Uses Python's built-in `ast` module to extract:
+The system also indexes project documentation from:
+
+```text
+README.md
+README.markdown
+docs/*.md
+docs/*.markdown
+```
+
+This allows users to ask project-level and onboarding questions such as:
+
+```text
+What does this project do?
+How do I set up this project?
+What is the tech stack?
+What should a new intern read first?
+Dự án này dùng để làm gì?
+Cách setup project này như thế nào?
+```
+
+If a repository does not contain README/docs, the app still works in code-only mode.
+
+---
+
+### 3. AST-Aware Code Parsing
+
+The system uses Python's built-in `ast` module to extract:
 
 - top-level functions
 - async functions
@@ -109,6 +209,7 @@ Example extracted metadata:
 
 ```json
 {
+  "source_type": "code",
   "file_path": "app/services/user_service.py",
   "symbol_name": "create_user",
   "qualified_name": "create_user",
@@ -120,11 +221,11 @@ Example extracted metadata:
 
 ---
 
-### 3. Code Chunking
+### 4. Code Chunking
 
-Each function, class, or method becomes a searchable chunk.
+Each Python function, class, or method becomes a searchable chunk.
 
-A chunk contains:
+A code chunk contains:
 
 - source code
 - file path
@@ -136,7 +237,7 @@ A chunk contains:
 - docstring, if available
 - imports, if available
 
-Example chunk:
+Example code chunk:
 
 ```text
 File: app/services/user_service.py
@@ -154,9 +255,34 @@ def create_user(email: str) -> dict:
 
 ---
 
-### 4. Vector Search
+### 5. Documentation Chunking
 
-Code chunks are embedded using a local sentence-transformers model and stored in ChromaDB.
+Markdown files are chunked by headings and line ranges.
+
+Example documentation chunk metadata:
+
+```json
+{
+  "source_type": "doc",
+  "relative_path": "README.md",
+  "heading": "Purpose",
+  "symbol_type": "documentation",
+  "start_line": 5,
+  "end_line": 8
+}
+```
+
+Example citation:
+
+```text
+README.md:5-8 — Purpose
+```
+
+---
+
+### 6. Embeddings and Vector Store
+
+Code and documentation chunks are embedded using a local sentence-transformers model and stored in ChromaDB.
 
 Default embedding model:
 
@@ -168,38 +294,48 @@ This runs on CPU and does not require CUDA or GPU.
 
 ---
 
-### 5. Hybrid Retrieval
+### 7. Hybrid Retrieval
 
-Pure vector search is often not enough for code because code search needs exact symbol matching.
+Pure vector search is often not enough for code, because code search needs exact symbol matching.
 
 This project combines:
 
 ```text
-final_score =
-    vector_score
-  + keyword_score
-  + symbol_score
+Vector Search
++ BM25 Lexical Search
++ Keyword Matching
++ Symbol-Aware Reranking
 ```
 
-This helps prioritize exact symbols like:
+The final retrieval score combines:
+
+```text
+semantic similarity
+BM25 lexical score
+keyword overlap
+symbol match score
+```
+
+This helps prioritize identifiers such as:
 
 ```text
 create_user
 UserService
-get_user
+TaskService
+create_task
+access_token
+verify_password
 ```
-
-over loosely related chunks.
 
 ---
 
-### 6. Agent Tools
+### 8. Agent Tools
 
-The system exposes several code navigation tools.
+The system exposes several repository navigation tools.
 
 #### `search_code(query)`
 
-Finds code chunks related to a natural language query.
+Searches across indexed repository chunks, including both code and documentation.
 
 Example:
 
@@ -253,11 +389,12 @@ This project follows a tool-based workflow:
 question
 → classify query type
 → choose the right tool
-→ search code / find symbol / trace references / read file
-→ return grounded answer with sources
+→ search docs/code or call code navigation tools
+→ construct grounded context
+→ generate or return an answer with sources
 ```
 
-For example, when the user asks:
+For example:
 
 ```text
 Where is create_user used?
@@ -269,13 +406,65 @@ The system does not only run semantic search. It chooses the reference tracing t
 find_references("create_user")
 ```
 
-This makes the system more suitable for codebase navigation than a normal document RAG chatbot.
+For documentation questions such as:
+
+```text
+Dự án này dùng để làm gì?
+```
+
+The system retrieves relevant README/docs chunks.
+
+This makes the system more suitable for Python repository onboarding and codebase understanding than a normal document RAG chatbot.
+
+---
+
+## Supported Query Types
+
+The agent currently routes questions into:
+
+```text
+documentation_query
+location_query
+reference_query
+explanation_query
+search_query
+```
+
+Examples:
+
+```text
+Dự án này dùng để làm gì?
+→ documentation_query
+
+Where is create_user implemented?
+→ location_query
+
+Where is create_user used?
+→ reference_query
+
+What does UserService do?
+→ explanation_query
+
+Find code related to user creation
+→ search_query
+```
 
 ---
 
 ## Example Questions
 
-You can ask:
+You can ask project-level questions:
+
+```text
+Dự án này dùng để làm gì?
+Cách setup project này như thế nào?
+Tech stack của dự án là gì?
+Intern mới nên đọc gì trước?
+What does this project do?
+How do I set up this project?
+```
+
+You can also ask code-level questions:
 
 ```text
 Where is create_user implemented?
@@ -284,10 +473,22 @@ Where is create_user used?
 
 What does UserService do?
 
+UserService làm gì?
+
 Find code related to user creation
+
+create_user được dùng ở đâu?
+
+Where is create_task implemented?
+
+What does TaskService do?
 ```
 
-Example output:
+---
+
+## Example Output
+
+### Code Question
 
 ```text
 Question:
@@ -295,18 +496,75 @@ Where is create_user used?
 
 Answer:
 I found `create_user` in these locations:
-- `app/main.py:1` (reference) — `from app.services.user_service import create_user`
-- `app/main.py:5` (reference) — `user = create_user("alice@example.com")`
-- `app/services/user_service.py:1` (definition) — `def create_user(email: str) -> dict:`
+- `app/main.py:1` imports `create_user`
+- `app/main.py:5` calls `create_user`
+- `app/services/user_service.py:1` defines `create_user`
 
 Tools used:
 - find_references("create_user")
 
 Sources:
-- app/main.py:1
-- app/main.py:5
-- app/services/user_service.py:1
+1. app/main.py:1 — reference
+2. app/main.py:5 — reference
+3. app/services/user_service.py:1 — definition
 ```
+
+### Documentation Question
+
+```text
+Question:
+Dự án này dùng để làm gì?
+
+Answer:
+Dự án này giúp các nhóm tạo, cập nhật, phân công và theo dõi các nhiệm vụ trong quá trình làm việc.
+
+Sources:
+1. README.md:5-8 — Purpose
+```
+
+---
+
+## Source Citations
+
+The UI shows sources separately below each answer.
+
+Code citations use:
+
+```text
+path/to/file.py:start-end — symbol_name
+```
+
+Example:
+
+```text
+app/services/user_service.py:1-5 — create_user
+```
+
+Reference citations use:
+
+```text
+path/to/file.py:line — reference
+```
+
+Example:
+
+```text
+app/main.py:5 — reference
+```
+
+Documentation citations use:
+
+```text
+README.md:start-end — heading
+```
+
+Example:
+
+```text
+README.md:5-8 — Purpose
+```
+
+The UI also provides a source excerpt viewer so users can inspect the exact code or documentation lines used to support the answer.
 
 ---
 
@@ -318,29 +576,33 @@ Python Repository
         v
 Repo Scanner
         |
-        v
-Python AST Parser
-        |
-        v
-Function/Class/Method Chunks
-        |
-        v
-Embedding Model
-        |
-        v
-Chroma Vector Database
-        |
-        v
-Hybrid Retriever
-        |
-        v
-Agent Tools
-        |
-        v
-Rule-Based Agent
-        |
-        v
-Streamlit UI
+        +-------------------+
+        |                   |
+        v                   v
+Python AST Parser      Markdown Scanner
+        |                   |
+        v                   v
+Code Chunks           Documentation Chunks
+        |                   |
+        +---------+---------+
+                  |
+                  v
+          Embedding Model
+                  |
+                  v
+         Chroma Vector Store
+                  |
+                  v
+          Hybrid Retriever
+                  |
+                  v
+             Agent Tools
+                  |
+                  v
+      Optional Gemini LLM Generation
+                  |
+                  v
+             Streamlit UI
 ```
 
 ---
@@ -352,10 +614,11 @@ Streamlit UI
 ```text
 repo path
 → scan Python files
-→ parse each file with AST
-→ extract symbols
-→ build code chunks
-→ embed chunks
+→ scan README/docs files
+→ parse Python files with AST
+→ extract functions/classes/methods
+→ chunk README/docs by headings
+→ embed all chunks
 → store chunks in ChromaDB
 ```
 
@@ -364,31 +627,11 @@ repo path
 ```text
 user question
 → classify query type
-→ select tool
-→ retrieve relevant code
-→ return answer with citations
-```
-
-Supported query types:
-
-```text
-location_query
-reference_query
-explanation_query
-search_query
-```
-
-Example:
-
-```text
-Question:
-Where is create_user implemented?
-
-Query type:
-location_query
-
-Tool used:
-find_symbol("create_user")
+→ select retrieval/tool strategy
+→ retrieve relevant code/docs
+→ construct context
+→ generate or return answer
+→ show sources with file path and line number
 ```
 
 ---
@@ -401,9 +644,12 @@ find_symbol("create_user")
 - sentence-transformers
 - PyTorch CPU
 - Python AST
+- rank-bm25
+- Google Gemini API
 - NumPy
 - scikit-learn
 - Pydantic
+- python-dotenv
 
 This project does not require GPU or CUDA.
 
@@ -423,6 +669,7 @@ agentic-python-codebase-rag/
     scanner.py
     ast_parser.py
     chunker.py
+    doc_chunker.py
     embeddings.py
     vector_store.py
     retriever.py
@@ -431,11 +678,18 @@ agentic-python-codebase-rag/
     indexer.py
     evaluator.py
     prompts.py
+    llm.py
+    company_repos.py
 
   scripts/
     __init__.py
     index_repo.py
     run_eval.py
+
+  examples/
+    sample_python_repo/
+    company_repos/
+      taskflow_api/
 
   data/
     repos/
@@ -512,6 +766,34 @@ This is normal. The project runs on CPU.
 
 ---
 
+## Environment Variables
+
+Create a `.env` file from `.env.example`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Example `.env`:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-1.5-flash
+LLM_BACKEND=gemini
+```
+
+Do not commit `.env` to GitHub.
+
+Make sure `.gitignore` contains:
+
+```gitignore
+.env
+```
+
+If LLM generation is disabled in the UI, the project can still run using the rule-based agent workflow.
+
+---
+
 ## Running the App
 
 Start the Streamlit UI:
@@ -526,12 +808,19 @@ Then open:
 http://localhost:8501
 ```
 
-In the sidebar, enter a Python repository path.
-
-Example:
+In the sidebar, choose a repository mode:
 
 ```text
-data/repos/sample_python_repo
+Custom Repo
+Company Repo
+```
+
+### Custom Repo Mode
+
+Enter a local Python repository path:
+
+```text
+examples/sample_python_repo
 ```
 
 Then click:
@@ -540,20 +829,62 @@ Then click:
 Index repository
 ```
 
-After indexing, ask questions such as:
+### Company Repo Mode
+
+Select a predefined company repository:
 
 ```text
-Where is create_user implemented?
-Where is create_user used?
-What does UserService do?
-Find code related to user creation
+TaskFlow API
 ```
+
+Then click:
+
+```text
+Index repository
+```
+
+After indexing, ask questions about the repository.
+
+If you want LLM-generated grounded answers, enable:
+
+```text
+Use LLM grounded answer generation
+```
+
+This requires a valid `GEMINI_API_KEY` in `.env`.
+
+---
+
+## UI Metrics
+
+After indexing, the UI displays:
+
+```text
+Python files
+Docs
+Ignored files
+Total chunks
+Collection
+```
+
+This helps users understand what the system indexed and what it ignored.
+
+Currently indexed:
+
+```text
+.py files
+README.md
+docs/*.md
+docs/*.markdown
+```
+
+Other file types are counted as ignored files.
 
 ---
 
 ## Running from Script
 
-You can also test the system without the UI:
+You can test the system without the UI:
 
 ```bash
 python -m scripts.index_repo
@@ -563,60 +894,51 @@ This indexes the sample repository and runs several test questions.
 
 ---
 
-## Sample Output
+## Evaluation
 
-```text
-Question:
-Where is create_user implemented?
+The project includes a lightweight evaluation script for retrieval and agent workflow correctness.
 
-Query type:
-location_query
+Run:
 
-Tools used:
-- find_symbol("create_user")
-
-Answer:
-`create_user` is defined in:
-- `app/services/user_service.py:1-5` — `create_user` (function)
-
-Sources:
-- app/services/user_service.py:1-5
+```bash
+python -m scripts.run_eval
 ```
 
+Current evaluation is performed on a small curated sample Python repository.
+
+Metrics:
+
+- Query type accuracy
+- Average source recall
+- Exact source match rate
+
+Current result on the curated sample repository:
+
 ```text
-Question:
-Where is create_user used?
-
-Query type:
-reference_query
-
-Tools used:
-- find_references("create_user")
-
-Answer:
-I found `create_user` in these locations:
-- `app/main.py:1` (reference)
-- `app/main.py:5` (reference)
-- `app/services/user_service.py:1` (definition)
-
-Sources:
-- app/main.py:1
-- app/main.py:5
-- app/services/user_service.py:1
+Number of cases:          6
+Query type accuracy:      100.00%
+Average source recall:    100.00%
+Exact source match rate:  100.00%
 ```
+
+The evaluation currently focuses on query routing, source retrieval, and citation correctness. It does not yet evaluate LLM answer quality or large real-world repositories.
 
 ---
 
 ## Limitations
 
-- Supports Python codebases only
-- Current agent workflow is rule-based
-- Current response generation is not yet LLM-powered
+- Supports Python source files only for code-level parsing
+- Supports Markdown documentation only for docs-level retrieval
+- Does not currently index Jupyter notebooks
+- Does not currently index Dockerfile, YAML, JSON, requirements.txt, or pyproject.toml
+- Current agent routing is mostly rule-based
 - Reference search uses lightweight text matching
 - It is not a full language server
 - It does not modify code
 - It does not create pull requests
 - Large repositories may take longer to index on CPU
+- Gemini API availability may vary depending on quota and model demand
+- Current evaluation is based on a small sample repository
 
 ---
 
@@ -624,17 +946,20 @@ Sources:
 
 Planned improvements:
 
-- Add LLM-based natural language answer generation
-- Add retrieval evaluation metrics:
-  - retrieval hit rate
-  - citation accuracy
-  - answer groundedness
+- Add larger real-world Python repository evaluation
+- Add LLM answer quality evaluation
+- Add support for requirements.txt and pyproject.toml indexing
+- Add Dockerfile and YAML config indexing
+- Add Jupyter notebook `.ipynb` support
 - Improve reference tracing with AST-based call detection
 - Add FastAPI route analysis
+- Add query decomposition for flow questions
+- Add MMR or cross-encoder reranking
 - Add better UI for retrieved chunks and tool traces
 - Add incremental indexing
-- Add support for larger real-world repositories
+- Add support for multiple repositories
 - Add optional OpenAI/Gemini embedding backend
+- Add deployment instructions
 
 ---
 
@@ -643,13 +968,14 @@ Planned improvements:
 This project demonstrates:
 
 - RAG system design
+- Agentic tool routing
 - Code-aware retrieval
 - AST-based parsing
+- Documentation-aware retrieval
 - Vector database usage
+- BM25 lexical retrieval
 - Hybrid retrieval
-- Agent tool design
 - Source-grounded answers
 - Streamlit application development
-- AI engineering workflow for codebase understanding
+- AI engineering workflow for repository onboarding and codebase understanding
 
----

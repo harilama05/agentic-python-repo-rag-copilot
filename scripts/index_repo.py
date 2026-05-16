@@ -16,7 +16,9 @@ def main() -> None:
     print(f"Repo path: {indexed.repo_path}")
     print(f"Collection: {indexed.collection_name}")
     print(f"Found {indexed.file_count} Python files")
-    print(f"Built {indexed.chunk_count} code chunks")
+    print(f"Found {indexed.doc_count} documentation files")
+    print(f"Ignored {indexed.ignored_file_count} other files")
+    print(f"Built {indexed.chunk_count} total chunks")
 
     questions = [
         "Where is create_user implemented?",
