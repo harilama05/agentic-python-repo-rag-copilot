@@ -1,7 +1,7 @@
 import streamlit as st
-
 from src.indexer import build_codebase_agent
-
+from pathlib import Path
+from src.constants import REPO_SOURCE_COMPANY, REPO_SOURCE_CUSTOM_LOCAL
 from src.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
 
 st.set_page_config(
@@ -51,6 +51,10 @@ with st.sidebar:
             value="custom_repo",
         )
 
+        repo_id = collection_name
+        repo_name = Path(repo_path).name
+        source_type = REPO_SOURCE_CUSTOM_LOCAL
+        is_persistent = False
     else:
         from src.company_repos import get_company_repo_options, get_company_repo
 
@@ -67,6 +71,11 @@ with st.sidebar:
 
         repo_path = str(selected_repo.path)
         collection_name = selected_repo.repo_id
+
+        repo_id = selected_repo.repo_id
+        repo_name = selected_name
+        source_type = REPO_SOURCE_COMPANY
+        is_persistent = True
 
         st.write(f"Repo path: `{repo_path}`")
 
@@ -106,12 +115,21 @@ with st.sidebar:
                     use_llm=use_llm,
                     retrieval_mode=retrieval_mode,
                     use_llm_router=use_llm_router,
+                    repo_id=repo_id,
+                    repo_name=repo_name,
+                    source_type=source_type,
+                    is_persistent=is_persistent,
+                    local_path=repo_path,
+                    save_metadata=True,
                 )
 
                 st.session_state.indexed_codebase = indexed
                 st.session_state.chat_history = []
 
                 st.success("Repository indexed successfully!")
+                st.write(f"Repo ID: {indexed.repo_id}")
+                st.write(f"Source type: {indexed.source_type}")
+                st.write(f"Persistent: {indexed.is_persistent}")
                 st.write(f"Python files indexed: {indexed.file_count}")
                 st.write(f"Documentation files indexed: {indexed.doc_count}")
                 st.write(f"Other files ignored: {indexed.ignored_file_count}")
@@ -159,6 +177,8 @@ with col4:
     st.metric("Total chunks", indexed.chunk_count)
 
 st.caption(
+    f"Repo ID: `{indexed.repo_id}` | "
+    f"Source: `{indexed.source_type}` | "
     f"Collection: `{indexed.collection_name}` | "
     f"Retrieval mode: `{indexed.tools.retrieval_mode}`"
 )

@@ -5,7 +5,6 @@ from src.agent import CodebaseAgent
 from src.ast_parser import parse_python_file
 from src.chunker import build_code_chunks
 from src.config import INDEX_DIR
-from src.constants import DOC_EXTENSIONS, IGNORE_DIRS, PYTHON_EXTENSIONS
 from src.doc_chunker import build_markdown_chunks, scan_markdown_files
 from src.llm import GeminiLLM
 from src.retriever import CodeRetriever
@@ -15,10 +14,25 @@ from src.tools import CodebaseTools
 from src.vector_store import CodeVectorStore
 from src.query_router import LLMQueryRouter
 from src.code_graph import CodeGraph, build_code_graph
+from datetime import datetime, timedelta, timezone
+from src.storage.metadata_store import MetadataStore
+from src.constants import (
+    DOC_EXTENSIONS,
+    IGNORE_DIRS,
+    INDEX_STATUS_INDEXED,
+    PYTHON_EXTENSIONS,
+    REPO_SOURCE_COMPANY,
+    REPO_SOURCE_CUSTOM_LOCAL,
+    REPO_VISIBILITY_COMPANY,
+    REPO_VISIBILITY_PRIVATE_SESSION,
+)
 
 @dataclass
-@dataclass
 class IndexedCodebase:
+    repo_id: str
+    repo_name: str
+    source_type: str
+    is_persistent: bool
     repo_path: Path
     collection_name: str
     file_count: int
@@ -86,12 +100,44 @@ def build_codebase_agent(
     use_llm: bool = True,
     retrieval_mode: str = RETRIEVAL_MODE_FAST,
     use_llm_router: bool = True,
+    repo_id: str | None = None,
+    repo_name: str | None = None,
+    source_type: str = REPO_SOURCE_CUSTOM_LOCAL,
+    is_persistent: bool | None = None,
+    local_path: str | None = None,
+    github_url: str | None = None,
+    branch: str | None = None,
+    commit_hash: str | None = None,
+    expires_at: datetime | None = None,
+    save_metadata: bool = True,
 ) -> IndexedCodebase:
     """
     Scan, parse, chunk, embed, and index a Python repo.
     Then return a ready-to-use CodebaseAgent.
     """
     repo_path = Path(repo_path).resolve()
+    if collection_name is None:
+        collection_name = make_collection_name(repo_path)
+
+    if repo_id is None:
+        repo_id = collection_name
+
+    if repo_name is None:
+        repo_name = repo_path.name
+
+    if is_persistent is None:
+        is_persistent = source_type == REPO_SOURCE_COMPANY
+
+    if source_type == REPO_SOURCE_COMPANY:
+        visibility = REPO_VISIBILITY_COMPANY
+    else:
+        visibility = REPO_VISIBILITY_PRIVATE_SESSION
+
+    if local_path is None:
+        local_path = str(repo_path)
+
+    if not is_persistent and expires_at is None:
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
     if not repo_path.exists():
         raise FileNotFoundError(f"Repo path does not exist: {repo_path}")
@@ -117,9 +163,6 @@ def build_codebase_agent(
     # Build the code graph
     code_graph = build_code_graph(repo_path)
 
-    if collection_name is None:
-        collection_name = make_collection_name(repo_path)
-
     vector_store = CodeVectorStore(
         persist_dir=INDEX_DIR / "chroma",
         collection_name=collection_name,
@@ -129,6 +172,40 @@ def build_codebase_agent(
         vector_store.reset_collection()
 
     vector_store.add_chunks(all_chunks)
+
+    if save_metadata:
+        metadata_store = MetadataStore()
+        indexed_at = datetime.now(timezone.utc)
+
+        metadata_store.upsert_repository(
+            repo_id=repo_id,
+            name=repo_name,
+            source_type=source_type,
+            visibility=visibility,
+            is_persistent=is_persistent,
+            collection_name=collection_name,
+            status=INDEX_STATUS_INDEXED,
+            file_count=len(python_files),
+            doc_count=len(markdown_files),
+            ignored_file_count=ignored_file_count,
+            chunk_count=len(all_chunks),
+            local_path=local_path,
+            github_url=github_url,
+            branch=branch,
+            commit_hash=commit_hash,
+            indexed_at=indexed_at,
+            expires_at=expires_at,
+        )
+
+        metadata_store.replace_chunks(
+            repo_id=repo_id,
+            chunks=all_chunks,
+        )
+
+        metadata_store.replace_code_graph(
+            repo_id=repo_id,
+            code_graph=code_graph,
+        )
 
     retriever = CodeRetriever(vector_store)
     tools = CodebaseTools(
@@ -150,6 +227,10 @@ def build_codebase_agent(
     )
 
     return IndexedCodebase(
+        repo_id=repo_id,
+        repo_name=repo_name,
+        source_type=source_type,
+        is_persistent=is_persistent,
         repo_path=repo_path,
         collection_name=collection_name,
         file_count=len(python_files),
