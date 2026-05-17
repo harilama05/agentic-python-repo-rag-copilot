@@ -2,6 +2,7 @@ import streamlit as st
 
 from src.indexer import build_codebase_agent
 
+from src.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
 
 st.set_page_config(
     page_title="Agentic RAG Copilot for Python Repositories",
@@ -69,6 +70,24 @@ with st.sidebar:
 
         st.write(f"Repo path: `{repo_path}`")
 
+    retrieval_mode_label = st.selectbox(
+        "Retrieval mode",
+        options=[
+            "Fast - Hybrid retrieval",
+            "Accurate - Cross-Encoder reranking",
+        ],
+        help=(
+            "Fast mode uses vector search + BM25 + keyword/symbol scoring. "
+            "Accurate mode reranks retrieved candidates with a Cross-Encoder, "
+            "which can improve relevance but is slower."
+        ),
+    )
+
+    if retrieval_mode_label.startswith("Accurate"):
+        retrieval_mode = RETRIEVAL_MODE_ACCURATE
+    else:
+        retrieval_mode = RETRIEVAL_MODE_FAST
+
     reset_collection = st.checkbox(
         "Reset collection before indexing",
         value=True,
@@ -89,6 +108,7 @@ with st.sidebar:
                     collection_name=collection_name,
                     reset_collection=reset_collection,
                     use_llm=use_llm,
+                    retrieval_mode=retrieval_mode,
                 )
 
                 st.session_state.indexed_codebase = indexed
@@ -100,6 +120,7 @@ with st.sidebar:
                 st.write(f"Other files ignored: {indexed.ignored_file_count}")
                 st.write(f"Total chunks: {indexed.chunk_count}")
                 st.write(f"Collection: {indexed.collection_name}")
+                st.write(f"Retrieval mode: {retrieval_mode}")
 
             except Exception as exc:
                 st.error(f"Indexing failed: {exc}")
@@ -141,6 +162,7 @@ with col4:
     st.metric("Total chunks", indexed.chunk_count)
 
 st.caption(f"Collection: {indexed.collection_name}")
+st.caption(f"Retrieval mode: `{indexed.tools.retrieval_mode}`")
 
 
 st.divider()

@@ -1,17 +1,18 @@
-from src.doc_chunker import build_markdown_chunks, scan_markdown_files
-from src.llm import GeminiLLM
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.agent import CodebaseAgent
 from src.ast_parser import parse_python_file
 from src.chunker import build_code_chunks
-from src.retriever import CodeRetriever
-from src.scanner import scan_python_files
-from src.tools import CodebaseTools
-from src.vector_store import CodeVectorStore
-from src.agent import CodebaseAgent
 from src.config import INDEX_DIR
 from src.constants import DOC_EXTENSIONS, IGNORE_DIRS, PYTHON_EXTENSIONS
+from src.doc_chunker import build_markdown_chunks, scan_markdown_files
+from src.llm import GeminiLLM
+from src.retriever import CodeRetriever
+from src.scanner import scan_python_files
+from src.settings import RETRIEVAL_MODE_FAST
+from src.tools import CodebaseTools
+from src.vector_store import CodeVectorStore
 
 @dataclass
 class IndexedCodebase:
@@ -79,6 +80,7 @@ def build_codebase_agent(
     collection_name: str | None = None,
     reset_collection: bool = True,
     use_llm: bool = False,
+    retrieval_mode: str = RETRIEVAL_MODE_FAST,
 ) -> IndexedCodebase:
     """
     Scan, parse, chunk, embed, and index a Python repo.
@@ -121,8 +123,11 @@ def build_codebase_agent(
     vector_store.add_chunks(all_chunks)
 
     retriever = CodeRetriever(vector_store)
-    tools = CodebaseTools(retriever=retriever, repo_root=repo_path)
-
+    tools = CodebaseTools(
+        retriever=retriever,
+        repo_root=repo_path,
+        retrieval_mode=retrieval_mode,
+    )
     llm = GeminiLLM() if use_llm else None
 
     agent = CodebaseAgent(

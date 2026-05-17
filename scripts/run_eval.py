@@ -8,6 +8,7 @@ from src.evaluator import (
 )
 from src.indexer import build_codebase_agent
 
+from src.settings import RETRIEVAL_MODE_FAST
 
 def resolve_repo_path(repo_path: str) -> Path:
     path = Path(repo_path)
@@ -44,6 +45,7 @@ def build_indexed_repos(cases):
             collection_name=f"eval_{repo_id}",
             reset_collection=True,
             use_llm=False,
+            retrieval_mode=RETRIEVAL_MODE_FAST,
         )
 
         print(f"Python files:        {indexed.file_count}")

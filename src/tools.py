@@ -4,6 +4,15 @@ from typing import Any, Dict, List, Optional
 
 from src.retriever import CodeRetriever, CodeSearchResult
 
+from src.reranker import CrossEncoderReranker, NoOpReranker
+from src.settings import (
+    CROSS_ENCODER_CANDIDATE_K,
+    DEFAULT_TOP_K,
+    RETRIEVAL_MODE_ACCURATE,
+    RETRIEVAL_MODE_FAST,
+)
+
+from src.constants import IGNORE_DIRS, PYTHON_EXTENSIONS
 
 def format_search_result(result: CodeSearchResult) -> Dict[str, Any]:
     metadata = result.metadata
@@ -29,16 +38,49 @@ def format_search_result(result: CodeSearchResult) -> Dict[str, Any]:
 
 
 class CodebaseTools:
-    def __init__(self, retriever: CodeRetriever, repo_root: str | Path):
+    def __init__(
+        self,
+        retriever: CodeRetriever,
+        repo_root: str | Path,
+        retrieval_mode: str = RETRIEVAL_MODE_FAST,
+    ):
         self.retriever = retriever
         self.repo_root = Path(repo_root).resolve()
+        self.retrieval_mode = retrieval_mode
 
-    def search_code(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        if retrieval_mode == RETRIEVAL_MODE_ACCURATE:
+            self.reranker = CrossEncoderReranker()
+        else:
+            self.reranker = NoOpReranker()
+
+    def search_code(self, query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
         """
-        Search code chunks using hybrid retrieval.
+        Search indexed repository chunks using hybrid retrieval.
+        This can return both code and documentation chunks.
         """
-        results = self.retriever.search_code(query=query, top_k=top_k)
-        return [format_search_result(result) for result in results]
+        if self.retrieval_mode == RETRIEVAL_MODE_ACCURATE:
+            candidate_k = max(CROSS_ENCODER_CANDIDATE_K, top_k)
+        else:
+            candidate_k = top_k
+
+        raw_results = self.retriever.search_code(
+            query=query,
+            top_k=candidate_k,
+        )
+
+        formatted_results = [
+            format_search_result(result)
+            for result in raw_results
+        ]
+
+        if self.retrieval_mode == RETRIEVAL_MODE_ACCURATE:
+            return self.reranker.rerank(
+                query=query,
+                results=formatted_results,
+                top_k=top_k,
+            )
+
+        return formatted_results[:top_k]
 
     def find_symbol(self, symbol_name: str, top_k: int = 10) -> List[Dict[str, Any]]:
         """
@@ -140,12 +182,16 @@ class CodebaseTools:
         """
         references: List[Dict[str, Any]] = []
 
-        # Match exact symbol as a Python identifier.
-        # Example: create_user should not match create_user_v2.
         pattern = re.compile(rf"\b{re.escape(symbol_name)}\b")
 
-        for file_path in self.repo_root.rglob("*.py"):
-            if any(part in {".git", ".venv", "venv", "__pycache__"} for part in file_path.parts):
+        for file_path in self.repo_root.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            if file_path.suffix.lower() not in PYTHON_EXTENSIONS:
+                continue
+
+            if any(part in IGNORE_DIRS for part in file_path.parts):
                 continue
 
             try:
