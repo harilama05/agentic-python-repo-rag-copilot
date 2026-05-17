@@ -1,6 +1,8 @@
 [
   {
-    "id": "eval_001",
+    "id": "sample_001",
+    "repo_id": "sample_python_repo",
+    "repo_path": "examples/sample_python_repo",
     "question": "Where is create_user implemented?",
     "expected_query_type": "location_query",
     "expected_sources": [
@@ -8,7 +10,9 @@
     ]
   },
   {
-    "id": "eval_002",
+    "id": "sample_002",
+    "repo_id": "sample_python_repo",
+    "repo_path": "examples/sample_python_repo",
     "question": "Where is create_user used?",
     "expected_query_type": "reference_query",
     "expected_sources": [
@@ -18,7 +22,9 @@
     ]
   },
   {
-    "id": "eval_003",
+    "id": "sample_003",
+    "repo_id": "sample_python_repo",
+    "repo_path": "examples/sample_python_repo",
     "question": "What does UserService do?",
     "expected_query_type": "explanation_query",
     "expected_sources": [
@@ -26,7 +32,9 @@
     ]
   },
   {
-    "id": "eval_004",
+    "id": "sample_004",
+    "repo_id": "sample_python_repo",
+    "repo_path": "examples/sample_python_repo",
     "question": "Find code related to user creation",
     "expected_query_type": "search_query",
     "expected_sources": [
@@ -35,7 +43,9 @@
     ]
   },
   {
-    "id": "eval_005",
+    "id": "sample_005",
+    "repo_id": "sample_python_repo",
+    "repo_path": "examples/sample_python_repo",
     "question": "create_user được dùng ở đâu?",
     "expected_query_type": "reference_query",
     "expected_sources": [
@@ -45,11 +55,86 @@
     ]
   },
   {
-    "id": "eval_006",
+    "id": "sample_006",
+    "repo_id": "sample_python_repo",
+    "repo_path": "examples/sample_python_repo",
     "question": "UserService làm gì?",
     "expected_query_type": "explanation_query",
     "expected_sources": [
       "app/services/user_service.py:8-13"
+    ]
+  },
+  {
+    "id": "company_001",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Dự án này dùng để làm gì?",
+    "expected_query_type": "documentation_query",
+    "expected_sources": [
+      "README.md:5-8"
+    ]
+  },
+  {
+    "id": "company_002",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Cách setup project này như thế nào?",
+    "expected_query_type": "documentation_query",
+    "expected_sources": [
+      "README.md:20-23"
+    ]
+  },
+  {
+    "id": "company_003",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Tech stack của dự án là gì?",
+    "expected_query_type": "documentation_query",
+    "expected_sources": [
+      "README.md:9-14"
+    ]
+  },
+  {
+    "id": "company_004",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Intern mới nên đọc gì trước?",
+    "expected_query_type": "documentation_query",
+    "expected_sources": [
+      "README.md:24-31"
+    ]
+  },
+  {
+    "id": "company_005",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Where is create_task implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/api/tasks.py:9-11",
+      "app/services/task_service.py:11-17"
+    ]
+  },
+  {
+    "id": "company_006",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Where is create_task used?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/api/tasks.py:9",
+      "app/api/tasks.py:11",
+      "app/services/task_service.py:11"
+    ]
+  },
+  {
+    "id": "company_007",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "What does TaskService do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/services/task_service.py:1-17"
     ]
   }
 ]

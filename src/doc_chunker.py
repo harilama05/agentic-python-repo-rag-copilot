@@ -3,10 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from src.chunker import CodeChunk
-from src.config import IGNORE_DIRS
-
-
-DOC_EXTENSIONS = {".md", ".markdown"}
+from src.constants import DOC_EXTENSIONS, IGNORE_DIRS, SOURCE_TYPE_DOC, SYMBOL_TYPE_DOCUMENTATION
 
 
 def should_ignore_path(path: Path) -> bool:
@@ -185,12 +182,12 @@ def build_markdown_chunks(
 
             metadata = {
                 "chunk_id": chunk_id,
-                "source_type": "doc",
+                "source_type": SOURCE_TYPE_DOC,
                 "file_path": str(file_path),
                 "relative_path": relative_path,
                 "symbol_name": heading,
                 "qualified_name": heading,
-                "symbol_type": "documentation",
+                "symbol_type": SYMBOL_TYPE_DOCUMENTATION,
                 "heading": heading,
                 "start_line": start_line,
                 "end_line": end_line,

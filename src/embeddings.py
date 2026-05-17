@@ -2,6 +2,7 @@ from typing import List
 
 from sentence_transformers import SentenceTransformer
 
+from src.settings import DEFAULT_EMBEDDING_MODEL
 
 class LocalEmbeddingModel:
     """
@@ -10,9 +11,9 @@ class LocalEmbeddingModel:
     This does not require GPU/CUDA.
     """
 
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_EMBEDDING_MODEL
+        self.model = SentenceTransformer(self.model_name)
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
         if not texts:

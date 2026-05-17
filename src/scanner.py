@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 
-from src.config import IGNORE_DIRS, SUPPORTED_EXTENSIONS
+from src.constants import IGNORE_DIRS, PYTHON_EXTENSIONS
 
 
 def should_ignore_path(path: Path) -> bool:
@@ -23,7 +23,7 @@ def is_supported_python_file(path: Path) -> bool:
     """
     return (
         path.is_file()
-        and path.suffix in SUPPORTED_EXTENSIONS
+        and path.suffix.lower() in PYTHON_EXTENSIONS
         and not should_ignore_path(path)
     )
 
@@ -48,7 +48,7 @@ def scan_python_files(repo_path: str | Path) -> List[Path]:
 
     python_files = []
 
-    for path in repo_path.rglob("*.py"):
+    for path in repo_path.rglob("*"):
         if is_supported_python_file(path):
             python_files.append(path)
 

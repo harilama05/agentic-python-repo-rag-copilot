@@ -9,6 +9,8 @@ from src.agent import AgentResponse
 @dataclass
 class EvalCase:
     id: str
+    repo_id: str
+    repo_path: str
     question: str
     expected_query_type: str
     expected_sources: List[str]
@@ -17,6 +19,8 @@ class EvalCase:
 @dataclass
 class EvalResult:
     id: str
+    repo_id: str
+    repo_path: str
     question: str
     expected_query_type: str
     actual_query_type: str
@@ -25,13 +29,12 @@ class EvalResult:
     actual_sources: List[str]
     source_hit_count: int
     source_recall: float
-    exact_source_match: bool
+    expected_sources_all_found: bool
     answer: str
 
 
 def load_eval_cases(path: str | Path) -> List[EvalCase]:
     path = Path(path)
-
     data = json.loads(path.read_text(encoding="utf-8"))
 
     cases = []
@@ -40,6 +43,8 @@ def load_eval_cases(path: str | Path) -> List[EvalCase]:
         cases.append(
             EvalCase(
                 id=item["id"],
+                repo_id=item["repo_id"],
+                repo_path=item["repo_path"],
                 question=item["question"],
                 expected_query_type=item["expected_query_type"],
                 expected_sources=item["expected_sources"],
@@ -75,12 +80,21 @@ def get_actual_sources(response: AgentResponse) -> List[str]:
     return [source_from_agent_source(source) for source in response.sources]
 
 
+def _parse_line_range(line_text: str) -> tuple[int, int]:
+    if "-" in line_text:
+        start, end = line_text.split("-", 1)
+        return int(start), int(end)
+
+    line = int(line_text)
+    return line, line
+
+
 def source_matches(expected: str, actual: str) -> bool:
     """
-    Flexible matching:
+    Flexible source matching:
     - exact match passes
-    - expected single line can match an actual range if line is inside range
-    - expected range can match exact same actual range
+    - expected single line can match an actual range if the line is inside the range
+    - expected range can match if actual range covers it
     """
     expected = normalize_source(expected)
     actual = normalize_source(actual)
@@ -97,24 +111,12 @@ def source_matches(expected: str, actual: str) -> bool:
     if expected_path != actual_path:
         return False
 
-    def parse_line_range(line_text: str):
-        if "-" in line_text:
-            start, end = line_text.split("-", 1)
-            return int(start), int(end)
-        line = int(line_text)
-        return line, line
-
     try:
-        expected_start, expected_end = parse_line_range(expected_lines)
-        actual_start, actual_end = parse_line_range(actual_lines)
+        expected_start, expected_end = _parse_line_range(expected_lines)
+        actual_start, actual_end = _parse_line_range(actual_lines)
     except ValueError:
         return False
 
-    # expected single line inside actual range
-    if expected_start == expected_end:
-        return actual_start <= expected_start <= actual_end
-
-    # expected range exactly same or covered by actual range
     return actual_start <= expected_start and expected_end <= actual_end
 
 
@@ -134,10 +136,12 @@ def evaluate_response(case: EvalCase, response: AgentResponse) -> EvalResult:
     else:
         source_recall = 1.0
 
-    exact_source_match = hit_count == len(case.expected_sources)
+    expected_sources_all_found = hit_count == len(case.expected_sources)
 
     return EvalResult(
         id=case.id,
+        repo_id=case.repo_id,
+        repo_path=case.repo_path,
         question=case.question,
         expected_query_type=case.expected_query_type,
         actual_query_type=response.query_type,
@@ -146,7 +150,7 @@ def evaluate_response(case: EvalCase, response: AgentResponse) -> EvalResult:
         actual_sources=actual_sources,
         source_hit_count=hit_count,
         source_recall=source_recall,
-        exact_source_match=exact_source_match,
+        expected_sources_all_found=expected_sources_all_found,
         answer=response.answer,
     )
 
@@ -154,10 +158,10 @@ def evaluate_response(case: EvalCase, response: AgentResponse) -> EvalResult:
 def summarize_eval_results(results: List[EvalResult]) -> Dict[str, float]:
     if not results:
         return {
-            "num_cases": 0,
+            "num_cases": 0.0,
             "query_type_accuracy": 0.0,
             "avg_source_recall": 0.0,
-            "exact_source_match_rate": 0.0,
+            "expected_sources_all_found_rate": 0.0,
         }
 
     num_cases = len(results)
@@ -170,13 +174,13 @@ def summarize_eval_results(results: List[EvalResult]) -> Dict[str, float]:
         result.source_recall for result in results
     ) / num_cases
 
-    exact_source_match_rate = sum(
-        1 for result in results if result.exact_source_match
+    expected_sources_all_found_rate = sum(
+        1 for result in results if result.expected_sources_all_found
     ) / num_cases
 
     return {
         "num_cases": float(num_cases),
         "query_type_accuracy": query_type_accuracy,
         "avg_source_recall": avg_source_recall,
-        "exact_source_match_rate": exact_source_match_rate,
+        "expected_sources_all_found_rate": expected_sources_all_found_rate,
     }

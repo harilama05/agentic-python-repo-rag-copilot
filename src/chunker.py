@@ -2,7 +2,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
+from src.constants import SOURCE_TYPE_CODE
 from src.ast_parser import ParsedPythonFile, CodeSymbol
 
 
@@ -152,7 +152,7 @@ def build_code_chunks(
 
         metadata = {
             "chunk_id": chunk_id,
-            "source_type": "code",
+            "source_type": SOURCE_TYPE_CODE,
             "file_path": str(file_path),
             "relative_path": relative_path,
             "symbol_name": symbol.name,

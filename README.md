@@ -904,24 +904,68 @@ Run:
 python -m scripts.run_eval
 ```
 
-Current evaluation is performed on a small curated sample Python repository.
+The current evaluation is performed on a curated set of repository QA cases across two sample Python repositories:
 
-Metrics:
+- `sample_python_repo`
+- `taskflow_api`
 
-- Query type accuracy
-- Average source recall
-- Exact source match rate
+The evaluation covers both code-level and documentation-level questions, including:
 
-Current result on the curated sample repository:
+- function implementation lookup
+- reference tracing
+- class explanation
+- README/documentation retrieval
+- Vietnamese and English questions
+- Custom Repo-style sample repository
+- Company Repo-style sample repository
+
+### Metrics
+
+The evaluation reports:
+
+- **Query type accuracy**: whether the agent routes the question to the correct query type
+- **Average source recall**: whether the expected source locations are retrieved
+- **Expected sources all found rate**: whether all expected sources for each case are found
+
+### Current Result
 
 ```text
-Number of cases:          6
-Query type accuracy:      100.00%
-Average source recall:    100.00%
-Exact source match rate:  100.00%
+Overall Evaluation Summary
+Number of cases:                 13
+Query type accuracy:             100.00%
+Average source recall:           100.00%
+Expected sources all found rate: 100.00%
+
+Evaluation Summary - sample_python_repo
+Number of cases:                 6
+Query type accuracy:             100.00%
+Average source recall:           100.00%
+Expected sources all found rate: 100.00%
+
+Evaluation Summary - taskflow_api
+Number of cases:                 7
+Query type accuracy:             100.00%
+Average source recall:           100.00%
+Expected sources all found rate: 100.00%
 ```
 
-The evaluation currently focuses on query routing, source retrieval, and citation correctness. It does not yet evaluate LLM answer quality or large real-world repositories.
+### Notes
+
+The current evaluation focuses on:
+
+- query routing correctness
+- source retrieval correctness
+- file path and line number citation correctness
+
+It does not yet evaluate:
+
+- LLM answer quality
+- large real-world repositories
+- hallucination rate
+- latency
+- production-scale robustness
+
+The reported 100% result is measured only on the curated sample evaluation set, not on arbitrary real-world repositories.
 
 ---
 

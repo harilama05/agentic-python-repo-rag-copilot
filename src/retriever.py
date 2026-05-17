@@ -6,6 +6,14 @@ from rank_bm25 import BM25Okapi
 
 from src.vector_store import CodeVectorStore, SearchResult
 
+from src.settings import (
+    BM25_WEIGHT,
+    DEFAULT_CANDIDATE_K,
+    DEFAULT_TOP_K,
+    KEYWORD_WEIGHT,
+    SYMBOL_WEIGHT,
+    VECTOR_WEIGHT,
+)
 
 @dataclass
 class CodeSearchResult:
@@ -96,8 +104,8 @@ class CodeRetriever:
     def search_code(
         self,
         query: str,
-        top_k: int = 5,
-        candidate_k: int = 20,
+        top_k: int = DEFAULT_TOP_K,
+        candidate_k: int = DEFAULT_CANDIDATE_K,
     ) -> List[CodeSearchResult]:
         vector_results: List[SearchResult] = self.vector_store.search(
             query=query,
@@ -122,10 +130,10 @@ class CodeRetriever:
             symbol_score = _score_symbol_match(query, result.metadata)
 
             final_score = (
-                0.40 * result.score
-                + 0.30 * bm25_score
-                + 0.20 * symbol_score
-                + 0.10 * keyword_score
+                VECTOR_WEIGHT * result.score
+                + BM25_WEIGHT * bm25_score
+                + SYMBOL_WEIGHT * symbol_score
+                + KEYWORD_WEIGHT * keyword_score
             )
 
             reranked.append(

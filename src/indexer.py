@@ -11,7 +11,7 @@ from src.tools import CodebaseTools
 from src.vector_store import CodeVectorStore
 from src.agent import CodebaseAgent
 from src.config import INDEX_DIR
-
+from src.constants import DOC_EXTENSIONS, IGNORE_DIRS, PYTHON_EXTENSIONS
 
 @dataclass
 class IndexedCodebase:
@@ -58,16 +58,16 @@ def count_ignored_files(repo_path: str | Path) -> int:
             continue
 
         parts = set(path.parts)
-        if any(ignored_dir in parts for ignored_dir in {".git", ".venv", "venv", "__pycache__"}):
+        if any(ignored_dir in parts for ignored_dir in IGNORE_DIRS):
             continue
 
         suffix = path.suffix.lower()
         name_lower = path.name.lower()
         parts_lower = {part.lower() for part in path.parts}
 
-        is_python = suffix == ".py"
-        is_readme = name_lower.startswith("readme") and suffix in {".md", ".markdown"}
-        is_docs_markdown = "docs" in parts_lower and suffix in {".md", ".markdown"}
+        is_python = suffix in PYTHON_EXTENSIONS
+        is_readme = name_lower.startswith("readme") and suffix in DOC_EXTENSIONS
+        is_docs_markdown = "docs" in parts_lower and suffix in DOC_EXTENSIONS
 
         if not (is_python or is_readme or is_docs_markdown):
             ignored_count += 1

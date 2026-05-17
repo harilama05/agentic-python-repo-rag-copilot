@@ -5,7 +5,14 @@ from typing import Any, Dict, List, Optional
 from src.llm import GeminiLLM
 from src.prompts import SYSTEM_PROMPT, build_grounded_user_prompt
 from src.tools import CodebaseTools
-
+from src.constants import (
+    QUERY_TYPE_DOCUMENTATION,
+    QUERY_TYPE_EXPLANATION,
+    QUERY_TYPE_LOCATION,
+    QUERY_TYPE_REFERENCE,
+    QUERY_TYPE_SEARCH,
+)
+from src.settings import DOCUMENTATION_TOP_K, DEFAULT_TOP_K, FALLBACK_SEARCH_TOP_K
 
 @dataclass
 class AgentResponse:
@@ -33,6 +40,8 @@ def classify_query(question: str) -> str:
 
     documentation_phrases = [
         "project",
+        "repository",
+        "repo",
         "overview",
         "setup",
         "install",
@@ -44,14 +53,14 @@ def classify_query(question: str) -> str:
         "purpose",
         "roadmap",
         "dự án",
+        "repo",
+        "repository",
         "tổng quan",
         "cài đặt",
         "cách chạy",
         "kiến trúc",
         "công nghệ",
         "tech stack",
-        "để làm gì",
-        "dùng để làm gì",
         "intern mới",
         "người mới",
         "đọc gì trước",
@@ -87,10 +96,13 @@ def classify_query(question: str) -> str:
 
     explanation_phrases = [
         "what does",
+        "what is the purpose of",
         "explain",
         "how does",
         "how do",
         "làm gì",
+        "để làm gì",
+        "dùng để làm gì",
         "giải thích",
         "hoạt động như thế nào",
         "chức năng gì",
@@ -98,18 +110,18 @@ def classify_query(question: str) -> str:
     ]
 
     if any(phrase in q for phrase in reference_phrases):
-        return "reference_query"
+        return QUERY_TYPE_REFERENCE
 
     if any(phrase in q for phrase in location_phrases):
-        return "location_query"
+        return QUERY_TYPE_LOCATION
 
     if any(phrase in q for phrase in documentation_phrases):
-        return "documentation_query"
+        return QUERY_TYPE_DOCUMENTATION
 
     if any(phrase in q for phrase in explanation_phrases):
-        return "explanation_query"
+        return QUERY_TYPE_EXPLANATION
 
-    return "search_query"
+    return QUERY_TYPE_SEARCH
 
 
 def extract_symbol_candidate(question: str) -> Optional[str]:
@@ -173,16 +185,16 @@ class CodebaseAgent:
         query_type = classify_query(question)
         symbol = extract_symbol_candidate(question)
 
-        if query_type == "reference_query" and symbol:
+        if query_type == QUERY_TYPE_REFERENCE and symbol:
             response = self._answer_reference_query(question, symbol)
 
-        elif query_type == "location_query" and symbol:
+        elif query_type == QUERY_TYPE_LOCATION and symbol:
             response = self._answer_location_query(question, symbol)
 
-        elif query_type == "explanation_query" and symbol:
+        elif query_type == QUERY_TYPE_EXPLANATION and symbol:
             response = self._answer_explanation_query(question, symbol)
 
-        elif query_type == "documentation_query":
+        elif query_type == QUERY_TYPE_DOCUMENTATION:
             response = self._answer_documentation_query(question)
 
         else:
@@ -236,7 +248,7 @@ class CodebaseAgent:
             answer = f"I could not find any references to `{symbol}` in the indexed codebase."
             return AgentResponse(
                 question=question,
-                query_type="reference_query",
+                query_type=QUERY_TYPE_REFERENCE,
                 answer=answer,
                 tools_used=tools_used,
                 sources=[],
@@ -265,7 +277,7 @@ class CodebaseAgent:
 
         return AgentResponse(
             question=question,
-            query_type="reference_query",
+            query_type=QUERY_TYPE_REFERENCE,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
@@ -278,13 +290,13 @@ class CodebaseAgent:
 
         if not symbol_results:
             tools_used.append(f'search_code("{question}")')
-            search_results = self.tools.search_code(question, top_k=3)
+            search_results = self.tools.search_code(question, top_k=FALLBACK_SEARCH_TOP_K)
 
             if not search_results:
                 answer = f"I could not find `{symbol}` in the indexed codebase."
                 return AgentResponse(
                     question=question,
-                    query_type="location_query",
+                    query_type=QUERY_TYPE_LOCATION,
                     answer=answer,
                     tools_used=tools_used,
                     sources=[],
@@ -311,7 +323,7 @@ class CodebaseAgent:
 
             return AgentResponse(
                 question=question,
-                query_type="location_query",
+                query_type=QUERY_TYPE_LOCATION,
                 answer="\n".join(lines),
                 tools_used=tools_used,
                 sources=sources,
@@ -341,7 +353,7 @@ class CodebaseAgent:
 
         return AgentResponse(
             question=question,
-            query_type="location_query",
+            query_type=QUERY_TYPE_LOCATION,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
@@ -387,7 +399,7 @@ class CodebaseAgent:
 
         return AgentResponse(
             question=question,
-            query_type="explanation_query",
+            query_type=QUERY_TYPE_EXPLANATION,
             answer=answer,
             tools_used=tools_used,
             sources=sources,
@@ -399,13 +411,13 @@ class CodebaseAgent:
 
     def _answer_search_query(self, question: str) -> AgentResponse:
         tools_used = [f'search_code("{question}")']
-        search_results = self.tools.search_code(question, top_k=5)
+        search_results = self.tools.search_code(question, top_k=DEFAULT_TOP_K)
 
         if not search_results:
             answer = "I could not find relevant code in the indexed codebase."
             return AgentResponse(
                 question=question,
-                query_type="search_query",
+                query_type=QUERY_TYPE_SEARCH,
                 answer=answer,
                 tools_used=tools_used,
                 sources=[],
@@ -432,15 +444,16 @@ class CodebaseAgent:
 
         return AgentResponse(
             question=question,
-            query_type="search_query",
+            query_type=QUERY_TYPE_SEARCH,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
             raw_results={"search_results": search_results},
         )
+    
     def _answer_documentation_query(self, question: str) -> AgentResponse:
         tools_used = [f'search_code("{question}")']
-        search_results = self.tools.search_code(question, top_k=5)
+        search_results = self.tools.search_code(question, top_k=DOCUMENTATION_TOP_K)
 
         if not search_results:
             answer = (
@@ -450,7 +463,7 @@ class CodebaseAgent:
 
             return AgentResponse(
                 question=question,
-                query_type="documentation_query",
+                query_type=QUERY_TYPE_DOCUMENTATION,
                 answer=answer,
                 tools_used=tools_used,
                 sources=[],
@@ -481,7 +494,7 @@ class CodebaseAgent:
 
         return AgentResponse(
             question=question,
-            query_type="documentation_query",
+            query_type=QUERY_TYPE_DOCUMENTATION,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
