@@ -267,15 +267,28 @@ class QdrantCodeVectorStore:
             result = {
                 "id": str(hit.id),
                 "score": hit.score,
+                "vector_score": hit.score,
+
                 "text": payload.get("text", ""),
+                "content": payload.get("text", ""),
+                "code": payload.get("text", ""),
+
                 "chunk_id": payload.get("chunk_id"),
                 "source_type": payload.get("source_type"),
+
                 "relative_path": payload.get("relative_path"),
+                "file_path": payload.get("relative_path"),
+
                 "start_line": payload.get("start_line"),
                 "end_line": payload.get("end_line"),
+                "line_start": payload.get("start_line"),
+                "line_end": payload.get("end_line"),
+
                 "symbol_name": payload.get("symbol_name"),
                 "qualified_name": payload.get("qualified_name"),
+                "symbol": payload.get("qualified_name") or payload.get("symbol_name"),
                 "symbol_type": payload.get("symbol_type"),
+
                 "heading": payload.get("heading"),
                 "metadata": payload,
             }
@@ -286,20 +299,29 @@ class QdrantCodeVectorStore:
 
     def search(
         self,
-        query_embedding: list[float] | None = None,
+        query: str | list[float] | None = None,
         top_k: int = 10,
+        query_embedding: list[float] | None = None,
         query_text: str | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Compatibility method.
+        Compatibility method for different retriever call styles.
 
         Supports:
-        - search(query_embedding=[...], top_k=10)
-        - search(query_text="...", top_k=10)
+        - search("task creation", top_k=10)
+        - search(query_text="task creation", top_k=10)
+        - search([0.1, 0.2, ...], top_k=10)
+        - search(query_embedding=[0.1, 0.2, ...], top_k=10)
         """
+        if query_embedding is None and isinstance(query, list):
+            query_embedding = query
+
+        if query_text is None and isinstance(query, str):
+            query_text = query
+
         if query_embedding is None:
             if not query_text:
-                raise ValueError("Either query_embedding or query_text must be provided")
+                raise ValueError("Either query text or query embedding must be provided")
 
             query_embedding = self.embedding_model.embed_query(query_text)
 

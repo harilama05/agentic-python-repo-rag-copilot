@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-
+from src.qdrant_vector_store import QdrantCodeVectorStore
 from src.agent import CodebaseAgent
 from src.ast_parser import parse_python_file
 from src.chunker import build_code_chunks
@@ -11,7 +11,7 @@ from src.retriever import CodeRetriever
 from src.scanner import scan_python_files
 from src.settings import RETRIEVAL_MODE_FAST
 from src.tools import CodebaseTools
-from src.vector_store import CodeVectorStore
+# from src.vector_store import CodeVectorStore
 from src.query_router import LLMQueryRouter
 from src.code_graph import CodeGraph, build_code_graph
 from datetime import datetime, timedelta, timezone
@@ -40,7 +40,7 @@ class IndexedCodebase:
     ignored_file_count: int
     chunk_count: int
     code_graph: CodeGraph
-    vector_store: CodeVectorStore
+    vector_store: QdrantCodeVectorStore
     retriever: CodeRetriever
     tools: CodebaseTools
     agent: CodebaseAgent
@@ -163,9 +163,8 @@ def build_codebase_agent(
     # Build the code graph
     code_graph = build_code_graph(repo_path)
 
-    vector_store = CodeVectorStore(
-        persist_dir=INDEX_DIR / "chroma",
-        collection_name=collection_name,
+    vector_store = QdrantCodeVectorStore(
+        repo_id=repo_id,
     )
 
     if reset_collection:

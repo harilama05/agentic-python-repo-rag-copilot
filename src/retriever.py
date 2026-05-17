@@ -4,8 +4,6 @@ from typing import Any, Dict, List
 
 from rank_bm25 import BM25Okapi
 
-from src.vector_store import CodeVectorStore, SearchResult
-
 from src.settings import (
     BM25_WEIGHT,
     DEFAULT_CANDIDATE_K,
@@ -14,6 +12,7 @@ from src.settings import (
     SYMBOL_WEIGHT,
     VECTOR_WEIGHT,
 )
+
 
 @dataclass
 class CodeSearchResult:
@@ -51,9 +50,9 @@ def _score_keyword_match(query: str, document: str) -> float:
 def _score_symbol_match(query: str, metadata: Dict[str, Any]) -> float:
     query_tokens = set(_tokenize(query))
 
-    symbol_name = str(metadata.get("symbol_name", ""))
-    qualified_name = str(metadata.get("qualified_name", ""))
-    symbol_type = str(metadata.get("symbol_type", ""))
+    symbol_name = str(metadata.get("symbol_name") or "")
+    qualified_name = str(metadata.get("qualified_name") or "")
+    symbol_type = str(metadata.get("symbol_type") or "")
 
     symbol_text = f"{symbol_name} {qualified_name} {symbol_type}"
     symbol_tokens = set(_tokenize(symbol_text))
@@ -89,16 +88,97 @@ def _normalize_scores(scores: List[float]) -> List[float]:
     return [(score - min_score) / (max_score - min_score) for score in scores]
 
 
+def _get_result_text(result: Dict[str, Any]) -> str:
+    return (
+        result.get("text")
+        or result.get("content")
+        or result.get("code")
+        or ""
+    )
+
+
+def _get_result_score(result: Dict[str, Any]) -> float:
+    return float(
+        result.get("score")
+        or result.get("vector_score")
+        or 0.0
+    )
+
+
+def _get_result_metadata(result: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = result.get("metadata")
+
+    if isinstance(metadata, dict):
+        return dict(metadata)
+
+    return {}
+
+
+def _get_result_value(
+    result: Dict[str, Any],
+    *keys: str,
+    default: Any = None,
+) -> Any:
+    metadata = _get_result_metadata(result)
+
+    for key in keys:
+        value = result.get(key)
+
+        if value is not None:
+            return value
+
+        value = metadata.get(key)
+
+        if value is not None:
+            return value
+
+    return default
+
+
+def _build_result_metadata(result: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build normalized metadata for downstream tools.
+
+    Qdrant returns dict results. This function ensures metadata contains
+    the common keys expected by tools/agent/source rendering.
+    """
+    metadata = _get_result_metadata(result)
+
+    normalized_fields = {
+        "chunk_id": _get_result_value(result, "chunk_id"),
+        "source_type": _get_result_value(result, "source_type"),
+        "relative_path": _get_result_value(result, "relative_path", "file_path"),
+        "file_path": _get_result_value(result, "file_path", "relative_path"),
+        "start_line": _get_result_value(result, "start_line", "line_start"),
+        "end_line": _get_result_value(result, "end_line", "line_end"),
+        "line_start": _get_result_value(result, "line_start", "start_line"),
+        "line_end": _get_result_value(result, "line_end", "end_line"),
+        "symbol_name": _get_result_value(result, "symbol_name", "name"),
+        "qualified_name": _get_result_value(result, "qualified_name", "symbol"),
+        "symbol": _get_result_value(result, "symbol", "qualified_name", "symbol_name"),
+        "symbol_type": _get_result_value(result, "symbol_type"),
+        "heading": _get_result_value(result, "heading", "title"),
+    }
+
+    for key, value in normalized_fields.items():
+        if value is not None and metadata.get(key) is None:
+            metadata[key] = value
+
+    return metadata
+
+
 class CodeRetriever:
     """
     Hybrid retriever:
-    - vector search from ChromaDB
+    - vector search from Qdrant
     - BM25 lexical scoring
     - keyword overlap scoring
     - symbol-aware scoring
+
+    The vector store is expected to return dict results.
     """
 
-    def __init__(self, vector_store: CodeVectorStore):
+    def __init__(self, vector_store: Any):
         self.vector_store = vector_store
 
     def search_code(
@@ -107,7 +187,7 @@ class CodeRetriever:
         top_k: int = DEFAULT_TOP_K,
         candidate_k: int = DEFAULT_CANDIDATE_K,
     ) -> List[CodeSearchResult]:
-        vector_results: List[SearchResult] = self.vector_store.search(
+        vector_results: List[Dict[str, Any]] = self.vector_store.search(
             query=query,
             top_k=candidate_k,
         )
@@ -115,8 +195,9 @@ class CodeRetriever:
         if not vector_results:
             return []
 
-        documents = [result.text for result in vector_results]
-        tokenized_documents = [_tokenize(doc) for doc in documents]
+        documents = [_get_result_text(result) for result in vector_results]
+
+        tokenized_documents = [_tokenize(document) for document in documents]
         tokenized_query = _tokenize(query)
 
         bm25 = BM25Okapi(tokenized_documents)
@@ -125,23 +206,35 @@ class CodeRetriever:
 
         reranked: List[CodeSearchResult] = []
 
-        for result, bm25_score in zip(vector_results, normalized_bm25_scores):
-            keyword_score = _score_keyword_match(query, result.text)
-            symbol_score = _score_symbol_match(query, result.metadata)
+        for result, document, bm25_score in zip(
+            vector_results,
+            documents,
+            normalized_bm25_scores,
+        ):
+            metadata = _build_result_metadata(result)
+
+            vector_score = _get_result_score(result)
+            keyword_score = _score_keyword_match(query, document)
+            symbol_score = _score_symbol_match(query, metadata)
 
             final_score = (
-                VECTOR_WEIGHT * result.score
+                VECTOR_WEIGHT * vector_score
                 + BM25_WEIGHT * bm25_score
                 + SYMBOL_WEIGHT * symbol_score
                 + KEYWORD_WEIGHT * keyword_score
             )
 
+            chunk_id = (
+                str(_get_result_value(result, "chunk_id", default=""))
+                or str(_get_result_value(result, "id", default=""))
+            )
+
             reranked.append(
                 CodeSearchResult(
-                    chunk_id=result.chunk_id,
-                    text=result.text,
-                    metadata=result.metadata,
-                    vector_score=result.score,
+                    chunk_id=chunk_id,
+                    text=document,
+                    metadata=metadata,
+                    vector_score=vector_score,
                     bm25_score=bm25_score,
                     keyword_score=keyword_score,
                     symbol_score=symbol_score,
