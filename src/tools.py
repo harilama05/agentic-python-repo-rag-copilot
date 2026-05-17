@@ -14,6 +14,8 @@ from src.settings import (
 
 from src.constants import IGNORE_DIRS, PYTHON_EXTENSIONS
 
+from src.code_graph import CodeGraph, CodeNode
+
 def format_search_result(result: CodeSearchResult) -> Dict[str, Any]:
     metadata = result.metadata
 
@@ -36,6 +38,16 @@ def format_search_result(result: CodeSearchResult) -> Dict[str, Any]:
         "text": result.text,
     }
 
+def format_graph_node(node: CodeNode, node_role: str = "node") -> Dict[str, Any]:
+    return {
+        "node_id": node.node_id,
+        "role": node_role,
+        "relative_path": node.relative_path,
+        "line_start": node.start_line,
+        "line_end": node.end_line,
+        "symbol": node.qualified_name,
+        "type": node.node_type,
+    }
 
 class CodebaseTools:
     def __init__(
@@ -43,10 +55,12 @@ class CodebaseTools:
         retriever: CodeRetriever,
         repo_root: str | Path,
         retrieval_mode: str = RETRIEVAL_MODE_FAST,
+        code_graph: CodeGraph | None = None,
     ):
         self.retriever = retriever
         self.repo_root = Path(repo_root).resolve()
         self.retrieval_mode = retrieval_mode
+        self.code_graph = code_graph or CodeGraph()
 
         if retrieval_mode == RETRIEVAL_MODE_ACCURATE:
             self.reranker = CrossEncoderReranker()
@@ -237,3 +251,60 @@ class CodebaseTools:
                     return references
 
         return references
+    
+    def find_callers(self, symbol_name: str) -> Dict[str, Any]:
+        """
+        Find functions/methods that call the given symbol.
+        """
+        result = self.code_graph.find_callers(symbol_name)
+
+        return {
+            "symbol": symbol_name,
+            "targets": [
+                format_graph_node(node, node_role="target")
+                for node in result["targets"]
+            ],
+            "callers": [
+                format_graph_node(node, node_role="caller")
+                for node in result["callers"]
+            ],
+        }
+    
+    def find_callees(self, symbol_name: str) -> Dict[str, Any]:
+        """
+        Find functions/methods called by the given symbol.
+        """
+        result = self.code_graph.find_callees(symbol_name)
+
+        return {
+            "symbol": symbol_name,
+            "sources": [
+                format_graph_node(node, node_role="source")
+                for node in result["sources"]
+            ],
+            "callees": [
+                format_graph_node(node, node_role="callee")
+                for node in result["callees"]
+            ],
+        }
+    
+    def impact_analysis(self, symbol_name: str, max_depth: int = 2) -> Dict[str, Any]:
+        """
+        Find code nodes that may be affected if a symbol changes or is removed.
+        """
+        result = self.code_graph.impact_analysis(
+            symbol=symbol_name,
+            max_depth=max_depth,
+        )
+
+        return {
+            "symbol": symbol_name,
+            "targets": [
+                format_graph_node(node, node_role="target")
+                for node in result["targets"]
+            ],
+            "affected": [
+                format_graph_node(node, node_role="affected")
+                for node in result["affected"]
+            ],
+        }

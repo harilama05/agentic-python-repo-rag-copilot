@@ -1,18 +1,21 @@
-import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from src.llm import GeminiLLM
 from src.prompts import SYSTEM_PROMPT, build_grounded_user_prompt
 from src.tools import CodebaseTools
 from src.constants import (
+    QUERY_TYPE_CALLEE,
+    QUERY_TYPE_CALLER,
     QUERY_TYPE_DOCUMENTATION,
     QUERY_TYPE_EXPLANATION,
+    QUERY_TYPE_IMPACT,
     QUERY_TYPE_LOCATION,
     QUERY_TYPE_REFERENCE,
     QUERY_TYPE_SEARCH,
 )
 from src.settings import DOCUMENTATION_TOP_K, DEFAULT_TOP_K, FALLBACK_SEARCH_TOP_K
+from src.query_router import LLMQueryRouter, QueryPlan
 
 @dataclass
 class AgentResponse:
@@ -24,168 +27,63 @@ class AgentResponse:
     raw_results: Dict[str, Any]
 
 
-STOPWORDS = {
-    "where", "is", "are", "the", "a", "an", "used", "use", "uses",
-    "implemented", "defined", "located", "what", "does", "do",
-    "explain", "how", "works", "work", "function", "class", "method",
-    "in", "of", "to", "for", "and", "or", "with",
-
-    "là", "gì", "làm", "để", "dùng", "được", "ở", "đâu",
-    "giải", "thích", "hoạt", "động", "như", "thế", "nào",
-    "chức", "năng", "có", "tác", "dụng",
-}
-
-def classify_query(question: str) -> str:
-    q = question.lower()
-
-    documentation_phrases = [
-        "project",
-        "repository",
-        "repo",
-        "overview",
-        "setup",
-        "install",
-        "installation",
-        "architecture",
-        "tech stack",
-        "onboarding",
-        "readme",
-        "purpose",
-        "roadmap",
-        "dự án",
-        "repo",
-        "repository",
-        "tổng quan",
-        "cài đặt",
-        "cách chạy",
-        "kiến trúc",
-        "công nghệ",
-        "tech stack",
-        "intern mới",
-        "người mới",
-        "đọc gì trước",
-    ]
-
-    reference_phrases = [
-        "used",
-        "called",
-        "references",
-        "referenced",
-        "được dùng",
-        "được sử dụng",
-        "dùng ở đâu",
-        "sử dụng ở đâu",
-        "gọi ở đâu",
-        "được gọi",
-        "tham chiếu",
-    ]
-
-    location_phrases = [
-        "where is",
-        "where are",
-        "implemented",
-        "defined",
-        "located",
-        "ở đâu",
-        "nằm ở đâu",
-        "định nghĩa ở đâu",
-        "implement ở đâu",
-        "được implement",
-        "được định nghĩa",
-    ]
-
-    explanation_phrases = [
-        "what does",
-        "what is the purpose of",
-        "explain",
-        "how does",
-        "how do",
-        "làm gì",
-        "để làm gì",
-        "dùng để làm gì",
-        "giải thích",
-        "hoạt động như thế nào",
-        "chức năng gì",
-        "có tác dụng gì",
-    ]
-
-    if any(phrase in q for phrase in reference_phrases):
-        return QUERY_TYPE_REFERENCE
-
-    if any(phrase in q for phrase in location_phrases):
-        return QUERY_TYPE_LOCATION
-
-    if any(phrase in q for phrase in documentation_phrases):
-        return QUERY_TYPE_DOCUMENTATION
-
-    if any(phrase in q for phrase in explanation_phrases):
-        return QUERY_TYPE_EXPLANATION
-
-    return QUERY_TYPE_SEARCH
-
-
-def extract_symbol_candidate(question: str) -> Optional[str]:
-    """
-    Extract likely symbol name from a natural language question.
-
-    Examples:
-    - "Where is create_user used?" -> create_user
-    - "What does UserService do?" -> UserService
-    """
-
-    # Prefer symbol inside backticks.
-    backtick_match = re.search(r"`([^`]+)`", question)
-    if backtick_match:
-        return backtick_match.group(1).strip()
-
-    tokens = re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", question)
-
-    candidates = []
-
-    for token in tokens:
-        lowered = token.lower()
-
-        if lowered in STOPWORDS:
-            continue
-
-        score = 0
-
-        # snake_case usually indicates Python symbol.
-        if "_" in token:
-            score += 3
-
-        # CamelCase likely class name.
-        if any(ch.isupper() for ch in token[1:]):
-            score += 2
-
-        # Non-stopword token still possible.
-        score += 1
-
-        candidates.append((score, token))
-
-    if not candidates:
-        return None
-
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    return candidates[0][1]
-
-
 class CodebaseAgent:
     def __init__(
         self,
         tools: CodebaseTools,
+        query_router: LLMQueryRouter,
         llm: Optional[GeminiLLM] = None,
         use_llm: bool = False,
     ):
         self.tools = tools
+        self.query_router = query_router
         self.llm = llm
         self.use_llm = use_llm
 
     def answer(self, question: str) -> AgentResponse:
-        query_type = classify_query(question)
-        symbol = extract_symbol_candidate(question)
+        query_plan = self.query_router.route(question)
 
-        if query_type == QUERY_TYPE_REFERENCE and symbol:
+        query_type = query_plan.query_type
+        symbol = query_plan.symbol
+        effective_question = query_plan.rewritten_query or question
+
+        symbol_resolution = None
+
+        graph_query_types = {
+            QUERY_TYPE_CALLER,
+            QUERY_TYPE_CALLEE,
+            QUERY_TYPE_IMPACT,
+        }
+
+        # If this is a graph query but the router could not extract a concrete
+        # symbol, resolve the symbol through repository search first.
+        #
+        # This automatically uses Fast or Accurate mode because search_code()
+        # lives inside CodebaseTools.
+        if query_type in graph_query_types and not symbol:
+            symbol, symbol_resolution = self._resolve_symbol_for_graph_query(
+                query=effective_question,
+                top_k=5,
+            )
+
+        if query_type == QUERY_TYPE_CALLER and symbol:
+            response = self._answer_caller_query(question, symbol)
+
+        elif query_type == QUERY_TYPE_CALLEE and symbol:
+            response = self._answer_callee_query(question, symbol)
+
+        elif query_type == QUERY_TYPE_IMPACT and symbol:
+            response = self._answer_impact_query(question, symbol)
+
+        elif query_type in graph_query_types and not symbol:
+            response = self._answer_graph_query_without_symbol(
+                question=question,
+                query_type=query_type,
+                rewritten_query=effective_question,
+                symbol_resolution=symbol_resolution,
+            )
+
+        elif query_type == QUERY_TYPE_REFERENCE and symbol:
             response = self._answer_reference_query(question, symbol)
 
         elif query_type == QUERY_TYPE_LOCATION and symbol:
@@ -195,10 +93,17 @@ class CodebaseAgent:
             response = self._answer_explanation_query(question, symbol)
 
         elif query_type == QUERY_TYPE_DOCUMENTATION:
-            response = self._answer_documentation_query(question)
+            response = self._answer_documentation_query(effective_question)
+            response.question = question
 
         else:
-            response = self._answer_search_query(question)
+            response = self._answer_search_query(effective_question)
+            response.question = question
+
+        response.raw_results["query_plan"] = asdict(query_plan)
+
+        if symbol_resolution is not None:
+            response.raw_results["symbol_resolution"] = symbol_resolution
 
         return self._maybe_generate_llm_answer(response)
 
@@ -231,11 +136,9 @@ class CodebaseAgent:
         except Exception as exc:
             response.raw_results["llm_enabled"] = False
             response.raw_results["llm_error"] = str(exc)
-
-            response.answer = (
-                response.answer
-                + "\n\n"
-                + f"LLM answer generation failed: {exc}"
+            response.raw_results["llm_warning"] = (
+                "LLM answer generation is currently unavailable. "
+                "Showing fallback tool-based answer."
             )
 
             return response
@@ -499,4 +402,360 @@ class CodebaseAgent:
             tools_used=tools_used,
             sources=sources,
             raw_results={"search_results": search_results},
+        )
+    
+    def _resolve_symbol_for_graph_query(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> tuple[str | None, Dict[str, Any]]:
+        """
+        Resolve a natural-language graph query into a concrete code symbol.
+
+        This uses self.tools.search_code(), so:
+        - Fast mode uses hybrid retrieval.
+        - Accurate mode uses hybrid retrieval + Cross-Encoder reranking.
+        """
+        search_results = self.tools.search_code(query, top_k=top_k)
+
+        candidates = []
+
+        for rank, result in enumerate(search_results):
+            if result.get("source_type") != "code":
+                continue
+
+            symbol = result.get("qualified_name") or result.get("symbol_name")
+            symbol_type = result.get("symbol_type")
+
+            if not symbol:
+                continue
+
+            if symbol_type not in {"function", "method", "class"}:
+                continue
+
+            score = 100 - rank
+
+            # Prefer qualified methods/classes for graph analysis.
+            if "." in symbol:
+                score += 10
+
+            if symbol_type == "method":
+                score += 8
+
+            if symbol_type == "function":
+                score += 5
+
+            candidates.append(
+                {
+                    "symbol": symbol,
+                    "symbol_type": symbol_type,
+                    "relative_path": result.get("relative_path"),
+                    "line_start": result.get("start_line"),
+                    "line_end": result.get("end_line"),
+                    "score": score,
+                    "final_score": result.get("final_score"),
+                    "cross_encoder_score": result.get("cross_encoder_score"),
+                    "source_type": result.get("source_type"),
+                }
+            )
+
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+
+        resolved_symbol = candidates[0]["symbol"] if candidates else None
+
+        return resolved_symbol, {
+            "query": query,
+            "resolved_symbol": resolved_symbol,
+            "candidates": candidates,
+            "raw_search_results": search_results,
+        }
+    
+    def _answer_caller_query(self, question: str, symbol: str) -> AgentResponse:
+        tools_used = [f'find_callers("{symbol}")']
+        graph_result = self.tools.find_callers(symbol)
+
+        targets = graph_result["targets"]
+        callers = graph_result["callers"]
+
+        if not targets:
+            answer = f"I could not find `{symbol}` in the code graph."
+            return AgentResponse(
+                question=question,
+                query_type=QUERY_TYPE_CALLER,
+                answer=answer,
+                tools_used=tools_used,
+                sources=[],
+                raw_results={"graph_result": graph_result},
+            )
+
+        if not callers:
+            answer = f"I found `{symbol}`, but could not find any callers in the code graph."
+            sources = targets
+            source_excerpts = self._build_source_excerpts(sources)
+
+            return AgentResponse(
+                question=question,
+                query_type=QUERY_TYPE_CALLER,
+                answer=answer,
+                tools_used=tools_used,
+                sources=sources,
+                raw_results={
+                    "graph_result": graph_result,
+                    "source_excerpts": source_excerpts,
+                },
+            )
+
+        lines = [f"`{symbol}` is called by:"]
+
+        for caller in callers:
+            lines.append(
+                f"- `{caller['symbol']}` in "
+                f"`{caller['relative_path']}:{caller['line_start']}-{caller['line_end']}`"
+            )
+
+        sources = targets + callers
+        source_excerpts = self._build_source_excerpts(sources)
+
+        return AgentResponse(
+            question=question,
+            query_type=QUERY_TYPE_CALLER,
+            answer="\n".join(lines),
+            tools_used=tools_used,
+            sources=sources,
+            raw_results={
+                "graph_result": graph_result,
+                "source_excerpts": source_excerpts,
+            },
+        )
+    
+    def _answer_callee_query(self, question: str, symbol: str) -> AgentResponse:
+        tools_used = [f'find_callees("{symbol}")']
+        graph_result = self.tools.find_callees(symbol)
+
+        sources_nodes = graph_result["sources"]
+        callees = graph_result["callees"]
+
+        if not sources_nodes:
+            answer = f"I could not find `{symbol}` in the code graph."
+            return AgentResponse(
+                question=question,
+                query_type=QUERY_TYPE_CALLEE,
+                answer=answer,
+                tools_used=tools_used,
+                sources=[],
+                raw_results={"graph_result": graph_result},
+            )
+
+        if not callees:
+            answer = f"I found `{symbol}`, but it does not call any indexed functions or methods."
+            sources = sources_nodes
+
+            return AgentResponse(
+                question=question,
+                query_type=QUERY_TYPE_CALLEE,
+                answer=answer,
+                tools_used=tools_used,
+                sources=sources,
+                raw_results={
+                    "graph_result": graph_result,
+                },
+            )
+
+        lines = [f"`{symbol}` calls:"]
+
+        for callee in callees:
+            lines.append(
+                f"- `{callee['symbol']}` in "
+                f"`{callee['relative_path']}:{callee['line_start']}-{callee['line_end']}`"
+            )
+
+        sources = sources_nodes + callees
+        source_excerpts = self._build_source_excerpts(sources)
+
+        return AgentResponse(
+            question=question,
+            query_type=QUERY_TYPE_CALLEE,
+            answer="\n".join(lines),
+            tools_used=tools_used,
+            sources=sources,
+            raw_results={
+                "graph_result": graph_result,
+                "source_excerpts": source_excerpts,
+            },
+        )
+    def _answer_impact_query(self, question: str, symbol: str) -> AgentResponse:
+        tools_used = [f'impact_analysis("{symbol}")']
+        graph_result = self.tools.impact_analysis(symbol)
+
+        targets = graph_result["targets"]
+        affected = graph_result["affected"]
+
+        if not targets:
+            answer = f"I could not find `{symbol}` in the code graph."
+            return AgentResponse(
+                question=question,
+                query_type=QUERY_TYPE_IMPACT,
+                answer=answer,
+                tools_used=tools_used,
+                sources=[],
+                raw_results={"graph_result": graph_result},
+            )
+
+        if not affected:
+            answer = (
+                f"I found `{symbol}`, but the code graph did not find any callers "
+                "that would be directly affected."
+            )
+            sources = targets
+            source_excerpts = self._build_source_excerpts(sources)
+
+            return AgentResponse(
+                question=question,
+                query_type=QUERY_TYPE_IMPACT,
+                answer=answer,
+                tools_used=tools_used,
+                sources=sources,
+                raw_results={
+                    "graph_result": graph_result,
+                    "source_excerpts": source_excerpts,
+                },
+            )
+
+        lines = [
+            f"If `{symbol}` is changed or removed, these code locations may be affected:"
+        ]
+
+        for node in affected:
+            lines.append(
+                f"- `{node['symbol']}` in "
+                f"`{node['relative_path']}:{node['line_start']}-{node['line_end']}`"
+            )
+
+        sources = targets + affected
+        source_excerpts = self._build_source_excerpts(sources)
+
+        return AgentResponse(
+            question=question,
+            query_type=QUERY_TYPE_IMPACT,
+            answer="\n".join(lines),
+            tools_used=tools_used,
+            sources=sources,
+            raw_results={
+                "graph_result": graph_result,
+                "source_excerpts": source_excerpts,
+            },
+        )
+    
+    def _build_source_excerpts(
+        self,
+        sources: List[Dict[str, Any]],
+        context_lines: int = 1,
+    ) -> List[Dict[str, Any]]:
+        """
+        Read source excerpts for graph/search sources so the LLM can explain
+        relationships with concrete code context.
+        """
+        excerpts: List[Dict[str, Any]] = []
+        seen = set()
+
+        for source in sources:
+            relative_path = source.get("relative_path")
+            line_start = source.get("line_start")
+            line_end = source.get("line_end")
+
+            if not relative_path or line_start is None or line_end is None:
+                continue
+
+            key = (relative_path, line_start, line_end)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            try:
+                file_content = self.tools.read_file(
+                    file_path=relative_path,
+                    start_line=line_start,
+                    end_line=line_end,
+                    context_lines=context_lines,
+                )
+
+                excerpts.append(
+                    {
+                        "relative_path": relative_path,
+                        "line_start": file_content["start_line"],
+                        "line_end": file_content["end_line"],
+                        "symbol": source.get("symbol"),
+                        "role": source.get("role") or source.get("type"),
+                        "content": file_content["content"],
+                    }
+                )
+
+            except Exception as exc:
+                excerpts.append(
+                    {
+                        "relative_path": relative_path,
+                        "line_start": line_start,
+                        "line_end": line_end,
+                        "symbol": source.get("symbol"),
+                        "role": source.get("role") or source.get("type"),
+                        "error": str(exc),
+                    }
+                )
+
+        return excerpts
+    
+    def _answer_graph_query_without_symbol(
+        self,
+        question: str,
+        query_type: str,
+        rewritten_query: str,
+        symbol_resolution: Dict[str, Any] | None,
+    ) -> AgentResponse:
+        tools_used = [f'search_code("{rewritten_query}")']
+
+        raw_search_results = []
+
+        if symbol_resolution:
+            raw_search_results = symbol_resolution.get("raw_search_results", [])
+
+        sources = []
+
+        for result in raw_search_results:
+            if result.get("source_type") != "code":
+                continue
+
+            sources.append(
+                {
+                    "relative_path": result["relative_path"],
+                    "line_start": result["start_line"],
+                    "line_end": result["end_line"],
+                    "symbol": result.get("qualified_name") or result.get("symbol_name"),
+                    "type": result.get("symbol_type"),
+                }
+            )
+
+        answer = (
+            "Tôi hiểu đây là câu hỏi về quan hệ hoặc ảnh hưởng trong code, "
+            "nhưng chưa xác định được function/class/method cụ thể để chạy phân tích graph. "
+            "Bạn có thể hỏi kèm tên symbol cụ thể, ví dụ `TaskService.create_task`."
+        )
+
+        if sources:
+            answer += (
+                "\n\nTôi tìm thấy một vài đoạn code có thể liên quan, "
+                "nhưng chưa đủ chắc chắn để kết luận graph impact/caller/callee."
+            )
+
+        return AgentResponse(
+            question=question,
+            query_type=query_type,
+            answer=answer,
+            tools_used=tools_used,
+            sources=sources,
+            raw_results={
+                "symbol_resolution": symbol_resolution,
+                "search_results": raw_search_results,
+            },
         )

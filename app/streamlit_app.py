@@ -88,15 +88,11 @@ with st.sidebar:
     else:
         retrieval_mode = RETRIEVAL_MODE_FAST
 
-    reset_collection = st.checkbox(
-        "Reset collection before indexing",
-        value=True,
-    )
-    use_llm = st.checkbox(
-        "Use LLM grounded answer generation",
-        value=False,
-        help="Requires GEMINI_API_KEY in .env",
-    )
+    reset_collection = True
+
+    use_llm_router = True
+
+    use_llm = True
 
     index_button = st.button("Index repository", type="primary")
 
@@ -109,6 +105,7 @@ with st.sidebar:
                     reset_collection=reset_collection,
                     use_llm=use_llm,
                     retrieval_mode=retrieval_mode,
+                    use_llm_router=use_llm_router,
                 )
 
                 st.session_state.indexed_codebase = indexed
@@ -161,8 +158,10 @@ with col3:
 with col4:
     st.metric("Total chunks", indexed.chunk_count)
 
-st.caption(f"Collection: {indexed.collection_name}")
-st.caption(f"Retrieval mode: `{indexed.tools.retrieval_mode}`")
+st.caption(
+    f"Collection: `{indexed.collection_name}` | "
+    f"Retrieval mode: `{indexed.tools.retrieval_mode}`"
+)
 
 
 st.divider()
@@ -186,10 +185,25 @@ if ask_button and question.strip():
 for response in reversed(st.session_state.chat_history):
     st.markdown("---")
 
-    st.markdown(f"### Question")
+    st.markdown("### Question")
     st.write(response.question)
 
     st.markdown("### Answer")
+
+    query_plan = response.raw_results.get("query_plan", {})
+
+    if query_plan.get("router") == "fallback_rule":
+        st.warning(
+            "LLM Query Router is currently unavailable or rate-limited. "
+            "The system is using the fallback rule-based router."
+        )
+
+    if response.raw_results.get("llm_enabled") is False:
+        st.warning(
+            "LLM answer generation is currently unavailable or rate-limited. "
+            "Showing the fallback tool/retrieval-based answer."
+        )
+
     st.markdown(response.answer)
 
     col1, col2 = st.columns([1, 2])

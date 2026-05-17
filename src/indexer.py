@@ -13,7 +13,10 @@ from src.scanner import scan_python_files
 from src.settings import RETRIEVAL_MODE_FAST
 from src.tools import CodebaseTools
 from src.vector_store import CodeVectorStore
+from src.query_router import LLMQueryRouter
+from src.code_graph import CodeGraph, build_code_graph
 
+@dataclass
 @dataclass
 class IndexedCodebase:
     repo_path: Path
@@ -22,6 +25,7 @@ class IndexedCodebase:
     doc_count: int
     ignored_file_count: int
     chunk_count: int
+    code_graph: CodeGraph
     vector_store: CodeVectorStore
     retriever: CodeRetriever
     tools: CodebaseTools
@@ -79,8 +83,9 @@ def build_codebase_agent(
     repo_path: str | Path,
     collection_name: str | None = None,
     reset_collection: bool = True,
-    use_llm: bool = False,
+    use_llm: bool = True,
     retrieval_mode: str = RETRIEVAL_MODE_FAST,
+    use_llm_router: bool = True,
 ) -> IndexedCodebase:
     """
     Scan, parse, chunk, embed, and index a Python repo.
@@ -109,6 +114,9 @@ def build_codebase_agent(
         chunks = build_markdown_chunks(file_path, repo_root=repo_path)
         all_chunks.extend(chunks)
 
+    # Build the code graph
+    code_graph = build_code_graph(repo_path)
+
     if collection_name is None:
         collection_name = make_collection_name(repo_path)
 
@@ -127,11 +135,16 @@ def build_codebase_agent(
         retriever=retriever,
         repo_root=repo_path,
         retrieval_mode=retrieval_mode,
+        code_graph=code_graph,
     )
-    llm = GeminiLLM() if use_llm else None
+    llm = GeminiLLM() if (use_llm or use_llm_router) else None
+    if llm is None:
+        raise ValueError("LLM Query Router requires GeminiLLM, but llm is None.")
 
+    query_router = LLMQueryRouter(llm=llm)
     agent = CodebaseAgent(
         tools=tools,
+        query_router=query_router,
         llm=llm,
         use_llm=use_llm,
     )
@@ -143,6 +156,7 @@ def build_codebase_agent(
         doc_count=len(markdown_files),
         ignored_file_count=ignored_file_count,
         chunk_count=len(all_chunks),
+        code_graph=code_graph,
         vector_store=vector_store,
         retriever=retriever,
         tools=tools,

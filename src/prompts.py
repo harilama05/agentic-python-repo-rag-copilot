@@ -1,19 +1,24 @@
 from typing import Any, Dict, List
-
+import json
 
 SYSTEM_PROMPT = """
 You are an AI codebase assistant.
 
-Your job is to answer questions about a Python repository using only the provided code and documentation context.
+Your job is to answer questions about a Python repository using only the provided code, documentation, and graph context.
 
 Rules:
 1. Answer only using the provided context.
 2. Do not invent files, functions, classes, project goals, setup steps, or behavior that are not shown in the context.
-3. Do not include inline citations in the answer.
-4. The UI will show sources separately, so keep the answer clean and readable.
-5. If the context is insufficient, say that you cannot determine the answer from the indexed repository.
-6. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
-7. Keep the answer concise but useful.
+3. Do not include inline citations in the answer. The UI will show sources separately.
+4. If graph_result is provided, use it for caller, callee, and impact analysis questions.
+5. For caller_query, answer using graph_result["callers"] and explain the relationship using source_excerpts when available.
+6. For callee_query, answer using graph_result["callees"] and explain the relationship using source_excerpts when available.
+7. For impact_query, answer using graph_result["affected"] and explain why those nodes may be affected using source_excerpts when available.
+8. Do not say information is unavailable if the relevant graph_result list contains entries.
+9. If source_excerpts are provided, use them to explain concrete code behavior such as object creation, method calls, function calls, and return statements.
+10. If the context is insufficient, say that you cannot determine the answer from the indexed repository.
+11. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
+12. Keep the answer concise but useful.
 """
 
 
@@ -96,61 +101,60 @@ def _format_file_content(file_content: Dict[str, Any]) -> str:
 def build_grounded_user_prompt(
     question: str,
     query_type: str,
-    tools_used: List[str],
-    raw_results: Dict[str, Any],
+    tools_used,
+    raw_results,
 ) -> str:
-    context_parts = []
-
-    references = raw_results.get("references", [])
-    if references:
-        context_parts.append(_format_references(references))
-
-    symbol_results = raw_results.get("symbol_results", [])
-    if symbol_results:
-        context_parts.append(
-            _format_code_results(
-                symbol_results,
-                title="Symbol lookup results:",
-            )
-        )
-
-    search_results = raw_results.get("search_results", [])
-    if search_results:
-        context_parts.append(
-            _format_code_results(
-                search_results,
-                title="Retrieved search results:",
-            )
-        )
-
-    file_content = raw_results.get("file_content", {})
-    if file_content:
-        context_parts.append(_format_file_content(file_content))
-
-    if not context_parts:
-        context_text = "No code context was retrieved."
-    else:
-        context_text = "\n\n---\n\n".join(context_parts)
+    raw_results_json = json.dumps(
+        raw_results,
+        ensure_ascii=False,
+        indent=2,
+        default=str,
+    )
 
     return f"""
-User question:
+Question:
 {question}
 
 Query type:
 {query_type}
 
 Tools used:
-{_format_tool_list(tools_used)}
+{tools_used}
 
-Retrieved code context:
-{context_text}
+Raw results:
+{raw_results_json}
 
-Task:
-Write a grounded answer to the user's question using only the retrieved code context.
+Graph result instructions:
+If raw_results contains "graph_result", use it as structured graph evidence.
+
+For caller_query:
+- Use graph_result["targets"] as the target symbol.
+- Use graph_result["callers"] to answer who calls the target.
+- If graph_result["callers"] contains entries, do not say the caller cannot be determined.
+- Use source_excerpts to explain how the caller calls the target.
+
+For callee_query:
+- Use graph_result["sources"] as the source symbol.
+- Use graph_result["callees"] to answer what the source calls.
+- If graph_result["callees"] contains entries, do not say the callees cannot be determined.
+- Use source_excerpts to explain the calls with concrete code context.
+
+For impact_query:
+- Use graph_result["targets"] as the changed, removed, or modified symbol.
+- Use graph_result["affected"] to answer what may be affected.
+- If graph_result["affected"] contains entries, do not say the impact cannot be determined.
+- Explain why each affected node may be impacted, using source_excerpts.
+
+Source excerpt instructions:
+- If raw_results contains "source_excerpts", use them to explain the relationship in more detail.
+- Mention concrete behavior shown in the excerpt, such as object instantiation, function calls, method calls, return statements, or dependency relationships.
+- Do not invent behavior that is not shown in the excerpts.
 
 Your answer must:
-- explain the relevant code or documentation clearly
+- answer in the same language as the user's question
+- be concise but useful
+- explain the relevant code, documentation, or graph relationship clearly
 - not include inline citations
-- rely only on the retrieved context
-- mention uncertainty if the retrieved context is insufficient
+- rely only on raw_results, graph_result, and source_excerpts
+- mention uncertainty only if the relevant raw result list is empty
 """

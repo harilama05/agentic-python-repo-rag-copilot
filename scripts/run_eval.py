@@ -46,6 +46,7 @@ def build_indexed_repos(cases):
             reset_collection=True,
             use_llm=False,
             retrieval_mode=RETRIEVAL_MODE_FAST,
+            use_llm_router=True,
         )
 
         print(f"Python files:        {indexed.file_count}")

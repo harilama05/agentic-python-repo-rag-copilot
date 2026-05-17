@@ -136,5 +136,38 @@
     "expected_sources": [
       "app/services/task_service.py:1-17"
     ]
+  },
+  {
+    "id": "taskflow_graph_caller_create_task",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "TaskService.create_task được gọi bởi ai?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/services/task_service.py:11-17",
+      "app/api/tasks.py:9-11"
+    ]
+  },
+  {
+    "id": "taskflow_graph_impact_create_task",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "TaskService.create_task nếu xóa thì sẽ ảnh hưởng gì?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/services/task_service.py:11-17",
+      "app/api/tasks.py:9-11"
+    ]
+  },
+  {
+    "id": "taskflow_graph_impact_natural_task_creation",
+    "repo_id": "taskflow_api",
+    "repo_path": "examples/company_repos/taskflow_api",
+    "question": "Nếu bỏ method tạo task thì chỗ nào bị ảnh hưởng?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/services/task_service.py:11-17",
+      "app/api/tasks.py:9-11"
+    ]
   }
 ]

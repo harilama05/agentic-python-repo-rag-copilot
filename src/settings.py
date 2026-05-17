@@ -24,7 +24,6 @@ RETRIEVAL_MODE_FAST = "fast"
 RETRIEVAL_MODE_ACCURATE = "accurate"
 CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 CROSS_ENCODER_CANDIDATE_K = 20
-CROSS_ENCODER_TOP_K = 5
 
 
 # Upload / ingestion settings, reserved for later
