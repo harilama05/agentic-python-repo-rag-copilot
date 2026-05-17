@@ -206,6 +206,10 @@ def build_codebase_agent(
             code_graph=code_graph,
         )
 
+        # Product-style behavior:
+        # after persisting graph, use the graph reconstructed from PostgreSQL.
+        code_graph = metadata_store.load_code_graph(repo_id)
+
     retriever = CodeRetriever(vector_store)
     tools = CodebaseTools(
         retriever=retriever,

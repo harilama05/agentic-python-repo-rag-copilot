@@ -6,7 +6,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from src.db.models import Chunk, CodeEdge, CodeNode, Repository
+from src.db.models import (
+    Chunk,
+    CodeEdge as DBCodeEdge,
+    CodeNode as DBCodeNode,
+    Repository,
+)
+from src.code_graph import CodeGraph, CodeNode as GraphCodeNode
 from src.db.session import get_db_session
 
 
@@ -266,17 +272,17 @@ class MetadataStore:
         """
         with get_db_session() as session:
             session.execute(
-                delete(CodeEdge).where(CodeEdge.repo_id == repo_id)
+                delete(DBCodeEdge).where(DBCodeEdge.repo_id == repo_id)
             )
             session.execute(
-                delete(CodeNode).where(CodeNode.repo_id == repo_id)
+                delete(DBCodeNode).where(DBCodeNode.repo_id == repo_id)
             )
 
-            node_rows: list[CodeNode] = []
+            node_rows: list[DBCodeNode] = []
 
             for node_id, node in code_graph.nodes.items():
                 node_rows.append(
-                    CodeNode(
+                    DBCodeNode(
                         repo_id=repo_id,
                         node_id=str(getattr(node, "node_id", None) or node_id),
                         name=str(getattr(node, "name", "")),
@@ -292,11 +298,11 @@ class MetadataStore:
                     )
                 )
 
-            edge_rows: list[CodeEdge] = []
+            edge_rows: list[DBCodeEdge] = []
 
             for edge in code_graph.edges:
                 edge_rows.append(
-                    CodeEdge(
+                    DBCodeEdge(
                         repo_id=repo_id,
                         source_node_id=str(
                             getattr(edge, "source_node_id", None)
@@ -372,7 +378,7 @@ class MetadataStore:
     def count_code_nodes(self, repo_id: str) -> int:
         with get_db_session() as session:
             result = session.execute(
-                select(CodeNode).where(CodeNode.repo_id == repo_id)
+                select(DBCodeNode).where(DBCodeNode.repo_id == repo_id)
             ).scalars().all()
 
             return len(result)
@@ -380,7 +386,53 @@ class MetadataStore:
     def count_code_edges(self, repo_id: str) -> int:
         with get_db_session() as session:
             result = session.execute(
-                select(CodeEdge).where(CodeEdge.repo_id == repo_id)
+                select(DBCodeEdge).where(DBCodeEdge.repo_id == repo_id)
             ).scalars().all()
 
             return len(result)
+    
+    def load_code_graph(self, repo_id: str) -> CodeGraph:
+        """
+        Reconstruct CodeGraph from PostgreSQL code_nodes/code_edges.
+
+        Important:
+        Use graph.add_node() and graph.add_edge() instead of assigning
+        graph.nodes / graph.edges directly, because CodeGraph also maintains:
+        - name_to_ids
+        - qualified_name_to_id
+        - incoming
+        - outgoing
+        """
+        with get_db_session() as session:
+            node_rows = session.execute(
+                select(DBCodeNode).where(DBCodeNode.repo_id == repo_id)
+            ).scalars().all()
+
+            edge_rows = session.execute(
+                select(DBCodeEdge).where(DBCodeEdge.repo_id == repo_id)
+            ).scalars().all()
+
+            graph = CodeGraph()
+
+            for row in node_rows:
+                node = GraphCodeNode(
+                    node_id=row.node_id,
+                    name=row.name,
+                    qualified_name=row.qualified_name,
+                    node_type=row.node_type,
+                    relative_path=row.relative_path,
+                    start_line=row.start_line,
+                    end_line=row.end_line,
+                    parent=row.parent or "",
+                )
+
+                graph.add_node(node)
+
+            for row in edge_rows:
+                graph.add_edge(
+                    source_id=row.source_node_id,
+                    target_id=row.target_node_id,
+                    edge_type=row.edge_type,
+                )
+
+            return graph
