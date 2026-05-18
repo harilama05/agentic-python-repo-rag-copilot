@@ -2,56 +2,114 @@
 
 Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases.
 
-The system indexes Python source code and documentation, builds a code graph, stores structured metadata in PostgreSQL, stores vector embeddings in Qdrant, and answers repository questions using Retrieval-Augmented Generation, Graph RAG, hybrid retrieval, Cross-Encoder reranking, and an LLM-based query planner.
+The system can index Python repositories, retrieve relevant code/documentation, build a code graph, and answer questions using Retrieval-Augmented Generation (RAG), Graph RAG, hybrid retrieval, Cross-Encoder reranking, and an LLM-based query planner.
 
-It can answer questions such as:
+It currently supports these repository sources:
 
-- What does this project do?
-- Where is `ModelEvaluator` defined?
-- What does `ModelEvaluator` do?
-- Who calls `TaskService.create_task`?
-- What will be affected if `TaskService.create_task` is removed?
-- Where is a function used?
-- Explain this class and show where it is implemented.
-- `ModelEvaluator` được tạo ở đâu, mục đích code là gì?
+- Company repositories
+- Custom local repositories
+- Public GitHub repositories
+- ZIP upload repositories
+
+---
+
+## Table of contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Install WSL2 on Windows](#install-wsl2-on-windows)
+- [Install Docker Desktop](#install-docker-desktop)
+- [Local setup](#local-setup)
+- [Environment variables](#environment-variables)
+- [Start PostgreSQL and Qdrant](#start-postgresql-and-qdrant)
+- [Initialize the database](#initialize-the-database)
+- [Run the app](#run-the-app)
+- [How to use](#how-to-use)
+- [Example questions](#example-questions)
+- [Evaluation](#evaluation)
+- [Useful scripts](#useful-scripts)
+- [Git ignore policy](#git-ignore-policy)
+- [Troubleshooting](#troubleshooting)
+- [Current status](#current-status)
+- [Planned improvements](#planned-improvements)
 
 ---
 
 ## Features
 
-### Repository ingestion
+### 1. Multiple repository input modes
 
-The app can index repositories from multiple sources:
+The app supports four repository sources.
 
-1. **Company repositories**
-   - Preconfigured repositories managed by the project owner/admin.
-   - Stored as persistent repositories.
+#### Company Repo
 
-2. **Custom local repositories**
-   - A user can provide a local repository path.
-   - Useful for local testing.
+Preconfigured repositories managed by the project owner/admin.
 
-3. **Public GitHub repositories**
-   - A user can enter a public GitHub URL.
-   - The app clones the repository into `data/runtime/github/`.
-   - Runtime GitHub folders are temporary and are not committed to Git.
+These are treated as persistent repositories.
+
+#### Custom Repo
+
+A local repository path on the user's machine.
+
+Useful for local testing and development.
+
+#### GitHub URL
+
+A public GitHub repository URL.
+
+The app clones the repository into:
+
+```text
+data/runtime/github/
+```
+
+This runtime folder is created automatically and should not be committed to Git.
+
+#### ZIP Upload
+
+A user can upload a `.zip` file containing a Python repository.
+
+The app extracts the uploaded ZIP into:
+
+```text
+data/runtime/uploads/
+```
+
+Then it indexes the extracted repository like any other repo.
+
+ZIP upload includes basic safety checks:
+
+- Validates the ZIP file
+- Prevents unsafe path traversal
+- Limits total extracted size
+- Limits number of files
+- Automatically detects the repository root after extraction
 
 ---
 
-## Core capabilities
-
-### 1. Code-aware retrieval
+### 2. Code-aware indexing
 
 The project indexes:
 
 - Python files
 - Markdown documentation such as `README.md`
-- Function, class, and method chunks
-- Metadata such as file path, line range, symbol name, symbol type, and heading
+- Function chunks
+- Class chunks
+- Method chunks
+- Documentation chunks
+- File path metadata
+- Line range metadata
+- Symbol metadata
+- Documentation heading metadata
 
-### 2. Hybrid retrieval
+---
 
-Fast mode uses:
+### 3. Hybrid retrieval
+
+Fast mode uses a hybrid retrieval strategy:
 
 - Qdrant vector search
 - BM25 lexical scoring
@@ -59,25 +117,28 @@ Fast mode uses:
 - Symbol-aware scoring
 - Documentation boosting for documentation queries
 
-### 3. Cross-Encoder reranking
+This is useful for fast, reasonably accurate codebase search.
 
-Accurate mode uses:
+---
 
-- Hybrid retrieval to collect candidates
-- Cross-Encoder reranking to improve result relevance
+### 4. Cross-Encoder reranking
 
-This mode is slower than Fast mode but can improve answer quality for vague or natural-language questions.
+Accurate mode adds Cross-Encoder reranking after initial retrieval.
 
-### 4. Graph RAG
+This mode is slower than Fast mode, but usually improves relevance for vague or natural-language questions.
+
+---
+
+### 5. Graph RAG
 
 The system builds a code graph from Python AST analysis.
 
-The graph supports:
+The graph can answer relationship questions such as:
 
-- Finding callers of a symbol
-- Finding callees of a symbol
-- Analyzing impact if a function/class/method changes
-- Resolving graph-related questions through retrieved symbols when the user does not provide an exact symbol
+- Who calls this function?
+- What functions does this method call?
+- What code may be affected if this method changes?
+- Where is this symbol defined?
 
 Example:
 
@@ -85,46 +146,134 @@ Example:
 TaskService.create_task được gọi bởi ai?
 ```
 
-The system can answer this using the code graph instead of relying only on semantic search.
+The system uses the code graph instead of relying only on vector search.
 
-### 5. LLM Query Planner
+---
+
+### 6. Persistent metadata storage
+
+The app stores structured repository metadata in PostgreSQL:
+
+- Repositories
+- Chunks
+- Code graph nodes
+- Code graph edges
+
+This allows the app to persist repo metadata and reconstruct the code graph from the database after restart.
+
+---
+
+### 7. Vector storage with Qdrant
+
+The app stores code/documentation embeddings in Qdrant.
+
+A single Qdrant collection can store chunks from multiple repositories.
+
+Each point includes metadata such as:
+
+- `repo_id`
+- `relative_path`
+- `source_type`
+- `symbol_name`
+- `qualified_name`
+- `start_line`
+- `end_line`
+
+---
+
+### 8. LLM Query Planner
 
 The app uses an LLM-based query planner.
 
-Instead of only classifying a question into one query type, the planner can decompose a user question into one or more query plans.
+Instead of only classifying a user question into one query type, it can decompose a complex question into multiple query plans.
 
-Example:
+Example question:
 
 ```text
 ModelEvaluator được tạo ở đâu, mục đích code là gì?
 ```
 
-The planner can produce:
+Possible plans:
 
 ```json
 {
   "plans": [
     {
       "query_type": "location_query",
-      "symbol": "ModelEvaluator"
+      "symbol": "ModelEvaluator",
+      "rewritten_query": "Where is ModelEvaluator defined?"
     },
     {
       "query_type": "explanation_query",
-      "symbol": "ModelEvaluator"
+      "symbol": "ModelEvaluator",
+      "rewritten_query": "What is the purpose of ModelEvaluator?"
     }
   ]
 }
 ```
 
-Then the agent executes each plan, merges the sources, and generates a grounded answer.
+The agent executes each plan, merges sources, and produces a grounded answer.
 
 Single-intent questions still work normally. They simply produce one query plan.
 
-### 6. Grounded LLM answer generation
+---
 
-After retrieval or graph analysis, the system can use Gemini to generate a natural-language answer grounded in tool results.
+### 9. Grounded LLM answer generation
 
-If the LLM is unavailable or quota is exhausted, the app falls back to tool-based answers.
+After retrieval or graph analysis, the app can use Gemini to generate a natural-language answer grounded in tool results.
+
+If the LLM is unavailable or quota is exhausted, the app can still return fallback tool-based answers.
+
+---
+
+## Architecture
+
+High-level flow:
+
+```text
+User question
+    ↓
+LLM Query Planner
+    ↓
+One or more QueryPlans
+    ↓
+Agent tool execution
+    ↓
+Retriever / Graph tools / File reader
+    ↓
+PostgreSQL + Qdrant
+    ↓
+Grounded answer generation
+    ↓
+Answer with sources
+```
+
+Indexing flow:
+
+```text
+Repository source
+    ↓
+Scan Python files and Markdown docs
+    ↓
+Chunk code/docs
+    ↓
+Build AST code graph
+    ↓
+Store metadata in PostgreSQL
+    ↓
+Store embeddings in Qdrant
+    ↓
+Ready for Q&A
+```
+
+Repository input flow:
+
+```text
+Company Repo       → local predefined repo
+Custom Repo        → local path
+GitHub URL         → clone into data/runtime/github/
+ZIP Upload         → extract into data/runtime/uploads/
+```
 
 ---
 
@@ -145,43 +294,6 @@ If the LLM is unavailable or quota is exhausted, the app falls back to tool-base
 
 ---
 
-## Storage architecture
-
-The project uses two storage layers.
-
-### PostgreSQL
-
-PostgreSQL stores structured metadata:
-
-- Repositories
-- Chunks
-- Code graph nodes
-- Code graph edges
-
-This allows the system to persist repository metadata and reconstruct code graph data after restart.
-
-### Qdrant
-
-Qdrant stores vector embeddings for code and documentation chunks.
-
-A single Qdrant collection can store chunks from multiple repositories. Each vector point is filtered by `repo_id`.
-
-### Runtime folders
-
-Runtime folders are created automatically when needed.
-
-Example:
-
-```text
-data/runtime/github/
-```
-
-This folder contains cloned GitHub repositories during local indexing.
-
-It should not be committed to Git.
-
----
-
 ## Tech stack
 
 - Python 3.10
@@ -195,6 +307,7 @@ It should not be committed to Git.
 - Gemini API
 - Docker Compose
 - Git
+- WSL2 on Windows
 
 ---
 
@@ -206,7 +319,8 @@ agentic-python-repo-rag-copilot/
 │   └── streamlit_app.py
 ├── data/
 │   └── runtime/
-│       └── github/
+│       ├── github/
+│       └── uploads/
 ├── examples/
 │   ├── sample_python_repo/
 │   └── company_repos/
@@ -216,6 +330,7 @@ agentic-python-repo-rag-copilot/
 │   ├── test_storage_connections.py
 │   ├── test_qdrant_vector_store.py
 │   ├── test_github_ingestion.py
+│   ├── test_zip_ingestion.py
 │   ├── inspect_metadata_records.py
 │   ├── inspect_qdrant_records.py
 │   ├── test_load_code_graph_from_db.py
@@ -238,6 +353,8 @@ agentic-python-repo-rag-copilot/
 │   ├── tools.py
 │   ├── db/
 │   ├── ingestion/
+│   │   ├── github_ingestion.py
+│   │   └── zip_ingestion.py
 │   └── storage/
 ├── docker-compose.yml
 ├── requirements.txt
@@ -248,16 +365,110 @@ agentic-python-repo-rag-copilot/
 
 ---
 
-## Requirements
+## Prerequisites
 
-Install these first:
+Install these before running the project locally:
 
 - Python 3.10
 - Git
+- WSL2
 - Docker Desktop
-- Visual Studio Code or another editor
+- Visual Studio Code or another code editor
 
-Docker Desktop is required because PostgreSQL and Qdrant run in Docker containers during local development.
+On Windows, Docker Desktop should run with the WSL2 backend.
+
+---
+
+## Install WSL2 on Windows
+
+Open PowerShell as Administrator and run:
+
+```powershell
+wsl --install
+```
+
+After installation, restart your computer if Windows asks you to.
+
+Check WSL status:
+
+```powershell
+wsl --status
+```
+
+Update WSL if needed:
+
+```powershell
+wsl --update
+```
+
+If you already installed WSL before, make sure WSL2 is used:
+
+```powershell
+wsl --set-default-version 2
+```
+
+You can also install Ubuntu from the Microsoft Store if Windows does not install it automatically.
+
+---
+
+## Install Docker Desktop
+
+Download and install Docker Desktop for Windows.
+
+During Docker Desktop installation, use these options:
+
+- Keep **Use WSL 2 instead of Hyper-V** checked
+- Keep **Add shortcut to desktop** checked if you want
+- Do not enable **Windows Containers** unless you specifically need it
+
+After installation:
+
+1. Open Docker Desktop
+2. Wait until Docker Desktop is fully running
+3. Go to **Settings**
+4. Make sure **Use the WSL 2 based engine** is enabled
+5. Click **Apply & Restart** if you changed anything
+
+Check Docker from PowerShell:
+
+```powershell
+docker --version
+docker ps
+```
+
+If Docker is not running, open Docker Desktop first.
+
+---
+
+## Local setup
+
+### 1. Clone the repository
+
+```powershell
+git clone https://github.com/<your-username>/<your-repo>.git
+cd agentic-python-repo-rag-copilot
+```
+
+### 2. Create a Python 3.10 virtual environment
+
+```powershell
+py -3.10 -m venv .venv
+.venv\Scripts\activate
+```
+
+If `py -3.10` does not work, install Python 3.10 first or use:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3. Install dependencies
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
 ---
 
@@ -281,60 +492,74 @@ QDRANT_COLLECTION=code_chunks
 
 Important:
 
-- Do not commit `.env`.
-- Commit `.env.example` instead.
-- Make sure the PostgreSQL port in `DATABASE_URL` matches your `docker-compose.yml`.
-- If your Docker Compose maps `5432:5432`, use `localhost:5432`.
-- If your Docker Compose maps `55432:5432`, use `localhost:55432`.
+- Do not commit `.env`
+- Commit `.env.example` instead
+- Make sure the PostgreSQL port matches your `docker-compose.yml`
+
+Port examples:
+
+If your `docker-compose.yml` maps PostgreSQL like this:
+
+```yaml
+ports:
+  - "5432:5432"
+```
+
+use:
+
+```env
+DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:5432/rag_db
+```
+
+If your `docker-compose.yml` maps PostgreSQL like this:
+
+```yaml
+ports:
+  - "55432:5432"
+```
+
+use:
+
+```env
+DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
+```
 
 ---
 
-## Local setup
-
-### 1. Clone the repository
-
-```powershell
-git clone https://github.com/<your-username>/<your-repo>.git
-cd agentic-python-repo-rag-copilot
-```
-
-### 2. Create a Python 3.10 virtual environment
-
-```powershell
-py -3.10 -m venv .venv
-.venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```powershell
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-### 4. Start PostgreSQL and Qdrant
+## Start PostgreSQL and Qdrant
 
 Make sure Docker Desktop is running.
+
+Then run:
 
 ```powershell
 docker compose up -d
 ```
 
-Check containers:
+Check running containers:
 
 ```powershell
 docker ps
 ```
 
-You should see containers for PostgreSQL and Qdrant.
+You should see containers for:
 
-### 5. Initialize database tables
+- PostgreSQL
+- Qdrant
+
+If Docker is not running, open Docker Desktop and wait until it is ready.
+
+---
+
+## Initialize the database
+
+Create database tables:
 
 ```powershell
 python -m scripts.init_db
 ```
 
-### 6. Test storage connections
+Test storage connections:
 
 ```powershell
 python -m scripts.test_storage_connections
@@ -348,19 +573,27 @@ Qdrant connection OK
 Collections: [...]
 ```
 
-### 7. Run the Streamlit app
+---
+
+## Run the app
+
+Start Streamlit:
 
 ```powershell
 python -m streamlit run app/streamlit_app.py
 ```
 
+Then open the Streamlit URL shown in the terminal.
+
 ---
 
 ## How to use
 
-### Company repository mode
+### Company Repo mode
 
 Use this mode for predefined repositories inside the project.
+
+Steps:
 
 1. Select `Company Repo`
 2. Choose a repository
@@ -376,21 +609,29 @@ Example:
 TaskService.create_task được gọi bởi ai?
 ```
 
-### Custom local repository mode
+---
+
+### Custom Repo mode
 
 Use this mode for a local path on your machine.
 
+Steps:
+
 1. Select `Custom Repo`
-2. Enter local repository path
+2. Enter a local repository path
 3. Click `Index repository`
 4. Ask questions
+
+---
 
 ### GitHub URL mode
 
 Use this mode for public GitHub repositories.
 
+Steps:
+
 1. Select `GitHub URL`
-2. Enter a public GitHub URL
+2. Enter a public GitHub repository URL
 
 Example:
 
@@ -398,7 +639,7 @@ Example:
 https://github.com/owner/repo
 ```
 
-3. Optionally enter a branch
+3. Optionally enter a branch name
 4. Click `Index repository`
 5. Ask questions
 
@@ -412,11 +653,32 @@ This folder is created automatically and is ignored by Git.
 
 ---
 
+### ZIP Upload mode
+
+Use this mode for uploaded repository ZIP files.
+
+Steps:
+
+1. Select `ZIP Upload`
+2. Upload a `.zip` file containing a Python repository
+3. Click `Index repository`
+4. Ask questions
+
+The ZIP is extracted into:
+
+```text
+data/runtime/uploads/
+```
+
+This folder is created automatically and is ignored by Git.
+
+---
+
 ## Retrieval modes
 
 ### Fast mode
 
-Fast mode uses hybrid retrieval:
+Fast mode uses:
 
 - Qdrant vector search
 - BM25
@@ -433,7 +695,7 @@ Accurate mode uses:
 - Hybrid retrieval
 - Cross-Encoder reranking
 
-This mode is slower but often improves result quality.
+This mode is slower but usually improves result relevance.
 
 ---
 
@@ -447,6 +709,16 @@ Dự án này dùng để làm gì?
 
 ```text
 What does this project do?
+```
+
+### Repository files
+
+```text
+Code này có những file chính nào?
+```
+
+```text
+What are the main files in this project?
 ```
 
 ### Symbol location
@@ -484,6 +756,12 @@ The agent can decompose this into:
 
 ```text
 TaskService.create_task được gọi bởi ai?
+```
+
+### Callee query
+
+```text
+TaskService.create_task gọi những hàm nào?
 ```
 
 ### Impact query
@@ -530,6 +808,12 @@ The current evaluation covers:
 
 ## Useful scripts
 
+### Initialize database
+
+```powershell
+python -m scripts.init_db
+```
+
 ### Test storage connections
 
 ```powershell
@@ -566,6 +850,12 @@ python -m scripts.test_load_code_graph_from_db
 python -m scripts.test_github_ingestion
 ```
 
+### Test ZIP ingestion
+
+```powershell
+python -m scripts.test_zip_ingestion
+```
+
 ### Test multi-intent router
 
 ```powershell
@@ -594,30 +884,129 @@ postgres_data/
 qdrant_data/
 ```
 
-Runtime folders such as `data/runtime/github/` are created automatically when indexing GitHub repositories.
+Runtime folders such as these are created automatically:
+
+```text
+data/runtime/github/
+data/runtime/uploads/
+```
 
 ---
 
-## Notes about LLM usage
+## Troubleshooting
 
-The app can still return fallback tool-based answers when LLM generation is unavailable.
+### Docker API error
 
-The LLM is used for:
+Error example:
 
-- Query planning
-- Query rewriting
-- Final grounded answer generation
+```text
+failed to connect to the docker API
+```
 
-Local components are used for:
+Fix:
 
-- Embeddings
-- Vector search
-- BM25
-- Cross-Encoder reranking
-- Code graph analysis
-- Fallback answers
+1. Open Docker Desktop
+2. Wait until Docker is running
+3. Run again:
 
-If Gemini quota is exhausted, the app may still answer using retrieval and graph tools, but the final answer may be less natural.
+```powershell
+docker ps
+docker compose up -d
+```
+
+---
+
+### PostgreSQL or Qdrant connection refused
+
+Error example:
+
+```text
+No connection could be made because the target machine actively refused it
+```
+
+Fix:
+
+```powershell
+docker compose up -d
+python -m scripts.test_storage_connections
+```
+
+Also check that `.env` uses the correct PostgreSQL port.
+
+---
+
+### Port conflict with local PostgreSQL
+
+If you already have PostgreSQL installed on your machine, port `5432` may be busy.
+
+In that case, map Docker PostgreSQL to another host port, for example:
+
+```yaml
+ports:
+  - "55432:5432"
+```
+
+Then update `.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
+```
+
+---
+
+### Docker Desktop WSL2 issue
+
+If Docker says it cannot connect to `dockerDesktopLinuxEngine`, try:
+
+```powershell
+wsl --shutdown
+```
+
+Then reopen Docker Desktop.
+
+---
+
+### Qdrant client/server version warning
+
+You may see a warning if the Qdrant Python client version and server version are not close enough.
+
+Usually this is a warning, not always a fatal error.
+
+If it causes issues, align the Qdrant Docker image version and Python package version.
+
+---
+
+### Gemini API quota or key issue
+
+If Gemini quota is exhausted or the API key is invalid, final LLM answer generation may fail.
+
+The app can still return tool-based fallback answers if retrieval and graph tools work.
+
+---
+
+### ZIP upload cannot be indexed
+
+Possible causes:
+
+- The uploaded file is not a valid `.zip`
+- The ZIP has no `.py` or `.md` files
+- The ZIP is too large
+- The ZIP contains unsafe paths
+
+Use a smaller Python repository ZIP and try again.
+
+---
+
+## Notes about runtime folders
+
+Runtime folders are not committed to Git.
+
+They are created automatically when needed:
+
+- GitHub repositories are cloned into `data/runtime/github/`
+- ZIP uploads are extracted into `data/runtime/uploads/`
+
+If these folders do not exist after cloning the project, that is normal.
 
 ---
 
@@ -633,22 +1022,28 @@ Implemented:
 - Accurate Cross-Encoder reranking
 - Graph RAG
 - GitHub public repository ingestion
+- ZIP upload repository ingestion
 - Code graph persistence and reload from PostgreSQL
 - LLM query planner
 - Multi-intent query execution
 - Streamlit UI
 - Evaluation script
 
-Planned improvements:
+---
 
-- ZIP upload ingestion
-- FastAPI backend
-- Frontend deployment
-- Cloud PostgreSQL such as Neon
-- Cloud Qdrant
-- User/admin authentication
-- Repository management dashboard
-- Background indexing jobs
+## Planned improvements
+
+- Improve Streamlit UI/UX
+- Add repository/session management
+- Add admin repository management
+- Add FastAPI backend
+- Add separate frontend
+- Deploy backend to Render
+- Deploy frontend to Vercel
+- Move PostgreSQL to Neon
+- Move Qdrant to Qdrant Cloud
+- Add background indexing jobs
+- Add authentication
 - Better support for larger repositories
 
 ---
@@ -664,7 +1059,7 @@ A production deployment can use:
 - Neon for PostgreSQL
 - Qdrant Cloud for vector database
 
-In production, temporary repository cloning should happen on the backend server, while persistent metadata and vectors should be stored in cloud databases.
+In production, temporary repository cloning and ZIP extraction should happen on the backend server, while persistent metadata and vectors should be stored in cloud databases.
 
 ---
 
