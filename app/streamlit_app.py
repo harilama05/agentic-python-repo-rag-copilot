@@ -8,14 +8,27 @@ from src.constants import (
     REPO_SOURCE_GITHUB,
     REPO_SOURCE_ZIP_UPLOAD,
 )
+from src.storage.repository_lifecycle import cleanup_temporary_repository
 from src.ingestion.zip_ingestion import ingest_zip_bytes
 from src.ingestion.github_ingestion import clone_github_repo
+
+def cleanup_active_temporary_repo() -> None:
+    active_temp_repo_id = st.session_state.get("active_temp_repo_id")
+
+    if not active_temp_repo_id:
+        return
+
+    deleted = cleanup_temporary_repository(active_temp_repo_id)
+
+    if deleted:
+        st.session_state.active_temp_repo_id = None
 
 st.set_page_config(
     page_title="Agentic RAG Copilot for Python Repositories",
     page_icon="🐍",
     layout="wide",
 )
+
 
 
 st.title("🐍 Agentic RAG Copilot for Python Repositories")
@@ -32,6 +45,9 @@ and answers codebase questions using agent tools.
 
 if "indexed_codebase" not in st.session_state:
     st.session_state.indexed_codebase = None
+
+if "active_temp_repo_id" not in st.session_state:
+    st.session_state.active_temp_repo_id = None
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -148,6 +164,8 @@ with st.sidebar:
                 if not github_url.strip():
                     st.error("Please enter a GitHub repository URL.")
                     st.stop()
+                
+                cleanup_active_temporary_repo()
 
                 with st.spinner("Cloning GitHub repository..."):
                     ingested_repo = clone_github_repo(
@@ -172,6 +190,8 @@ with st.sidebar:
                     st.error("Please upload a ZIP file.")
                     st.stop()
 
+                cleanup_active_temporary_repo()
+
                 with st.spinner("Extracting ZIP repository..."):
                     ingested_repo = ingest_zip_bytes(
                         filename=uploaded_zip.name,
@@ -187,6 +207,7 @@ with st.sidebar:
                 is_persistent = False
 
             with st.spinner("Indexing repository..."):
+                cleanup_active_temporary_repo()
                 indexed = build_codebase_agent(
                     repo_path=repo_path,
                     collection_name=collection_name,
@@ -207,6 +228,11 @@ with st.sidebar:
 
             st.session_state.indexed_codebase = indexed
             st.session_state.chat_history = []
+
+            if indexed.source_type in {REPO_SOURCE_GITHUB, REPO_SOURCE_ZIP_UPLOAD}:
+                st.session_state.active_temp_repo_id = indexed.repo_id
+            else:
+                st.session_state.active_temp_repo_id = None
 
             st.success("Repository indexed successfully!")
             st.write(f"Repo ID: {indexed.repo_id}")
