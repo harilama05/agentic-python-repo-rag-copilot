@@ -6,7 +6,9 @@ from src.constants import (
     REPO_SOURCE_COMPANY,
     REPO_SOURCE_CUSTOM_LOCAL,
     REPO_SOURCE_GITHUB,
+    REPO_SOURCE_ZIP_UPLOAD,
 )
+from src.ingestion.zip_ingestion import ingest_zip_bytes
 from src.ingestion.github_ingestion import clone_github_repo
 
 st.set_page_config(
@@ -40,7 +42,7 @@ with st.sidebar:
 
     repo_mode = st.radio(
         "Repository mode",
-        options=["Company Repo", "Custom Repo", "GitHub URL"],
+        options=["Company Repo", "Custom Repo", "GitHub URL", "ZIP Upload"],
         index=0,
     )
 
@@ -74,7 +76,18 @@ with st.sidebar:
         )
 
         st.caption("Only public GitHub repositories are supported.")
-        
+    
+    elif repo_mode == "ZIP Upload":
+        uploaded_zip = st.file_uploader(
+            "Upload a Python repository ZIP file",
+            type=["zip"],
+        )
+
+        st.caption(
+            "Upload a .zip file containing a Python repository. "
+            "The extracted files are stored temporarily in data/runtime/uploads/."
+        )
+
     else:
         from src.company_repos import get_company_repo_options, get_company_repo
 
@@ -127,6 +140,10 @@ with st.sidebar:
 
     if index_button:
         try:
+            github_url_for_metadata = None
+            branch_for_metadata = None
+            commit_hash_for_metadata = None
+
             if repo_mode == "GitHub URL":
                 if not github_url.strip():
                     st.error("Please enter a GitHub repository URL.")
@@ -150,10 +167,24 @@ with st.sidebar:
                 branch_for_metadata = ingested_repo.branch
                 commit_hash_for_metadata = ingested_repo.commit_hash
 
-            else:
-                github_url_for_metadata = None
-                branch_for_metadata = None
-                commit_hash_for_metadata = None
+            elif repo_mode == "ZIP Upload":
+                if uploaded_zip is None:
+                    st.error("Please upload a ZIP file.")
+                    st.stop()
+
+                with st.spinner("Extracting ZIP repository..."):
+                    ingested_repo = ingest_zip_bytes(
+                        filename=uploaded_zip.name,
+                        zip_bytes=uploaded_zip.getvalue(),
+                    )
+
+                repo_path = str(ingested_repo.local_path)
+                collection_name = ingested_repo.repo_id
+
+                repo_id = ingested_repo.repo_id
+                repo_name = ingested_repo.name
+                source_type = REPO_SOURCE_ZIP_UPLOAD
+                is_persistent = False
 
             with st.spinner("Indexing repository..."):
                 indexed = build_codebase_agent(
