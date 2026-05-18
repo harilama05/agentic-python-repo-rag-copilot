@@ -1,8 +1,13 @@
 import streamlit as st
 from src.indexer import build_codebase_agent
 from pathlib import Path
-from src.constants import REPO_SOURCE_COMPANY, REPO_SOURCE_CUSTOM_LOCAL
 from src.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
+from src.constants import (
+    REPO_SOURCE_COMPANY,
+    REPO_SOURCE_CUSTOM_LOCAL,
+    REPO_SOURCE_GITHUB,
+)
+from src.ingestion.github_ingestion import clone_github_repo
 
 st.set_page_config(
     page_title="Agentic RAG Copilot for Python Repositories",
@@ -35,7 +40,7 @@ with st.sidebar:
 
     repo_mode = st.radio(
         "Repository mode",
-        options=["Custom Repo", "Company Repo"],
+        options=["Company Repo", "Custom Repo", "GitHub URL"],
         index=0,
     )
 
@@ -55,6 +60,21 @@ with st.sidebar:
         repo_name = Path(repo_path).name
         source_type = REPO_SOURCE_CUSTOM_LOCAL
         is_persistent = False
+
+    elif repo_mode == "GitHub URL":
+        github_url = st.text_input(
+            "GitHub public repository URL",
+            placeholder="https://github.com/owner/repo",
+        )
+
+        github_branch = st.text_input(
+            "Branch (optional)",
+            value="",
+            help="Leave empty to use the default branch.",
+        )
+
+        st.caption("Only public GitHub repositories are supported.")
+        
     else:
         from src.company_repos import get_company_repo_options, get_company_repo
 
@@ -79,7 +99,7 @@ with st.sidebar:
 
         st.write(f"Repo path: `{repo_path}`")
 
-    retrieval_mode_label = st.selectbox(
+    retrieval_mode_label = st.radio(
         "Retrieval mode",
         options=[
             "Fast - Hybrid retrieval",
@@ -106,8 +126,36 @@ with st.sidebar:
     index_button = st.button("Index repository", type="primary")
 
     if index_button:
-        with st.spinner("Indexing repository..."):
-            try:
+        try:
+            if repo_mode == "GitHub URL":
+                if not github_url.strip():
+                    st.error("Please enter a GitHub repository URL.")
+                    st.stop()
+
+                with st.spinner("Cloning GitHub repository..."):
+                    ingested_repo = clone_github_repo(
+                        github_url=github_url,
+                        branch=github_branch.strip() or None,
+                    )
+
+                repo_path = str(ingested_repo.local_path)
+                collection_name = ingested_repo.repo_id
+
+                repo_id = ingested_repo.repo_id
+                repo_name = ingested_repo.name
+                source_type = REPO_SOURCE_GITHUB
+                is_persistent = False
+
+                github_url_for_metadata = ingested_repo.github_url
+                branch_for_metadata = ingested_repo.branch
+                commit_hash_for_metadata = ingested_repo.commit_hash
+
+            else:
+                github_url_for_metadata = None
+                branch_for_metadata = None
+                commit_hash_for_metadata = None
+
+            with st.spinner("Indexing repository..."):
                 indexed = build_codebase_agent(
                     repo_path=repo_path,
                     collection_name=collection_name,
@@ -120,25 +168,28 @@ with st.sidebar:
                     source_type=source_type,
                     is_persistent=is_persistent,
                     local_path=repo_path,
+                    github_url=github_url_for_metadata,
+                    branch=branch_for_metadata,
+                    commit_hash=commit_hash_for_metadata,
                     save_metadata=True,
                 )
 
-                st.session_state.indexed_codebase = indexed
-                st.session_state.chat_history = []
+            st.session_state.indexed_codebase = indexed
+            st.session_state.chat_history = []
 
-                st.success("Repository indexed successfully!")
-                st.write(f"Repo ID: {indexed.repo_id}")
-                st.write(f"Source type: {indexed.source_type}")
-                st.write(f"Persistent: {indexed.is_persistent}")
-                st.write(f"Python files indexed: {indexed.file_count}")
-                st.write(f"Documentation files indexed: {indexed.doc_count}")
-                st.write(f"Other files ignored: {indexed.ignored_file_count}")
-                st.write(f"Total chunks: {indexed.chunk_count}")
-                st.write(f"Collection: {indexed.collection_name}")
-                st.write(f"Retrieval mode: {retrieval_mode}")
+            st.success("Repository indexed successfully!")
+            st.write(f"Repo ID: {indexed.repo_id}")
+            st.write(f"Source type: {indexed.source_type}")
+            st.write(f"Persistent: {indexed.is_persistent}")
+            st.write(f"Python files indexed: {indexed.file_count}")
+            st.write(f"Documentation files indexed: {indexed.doc_count}")
+            st.write(f"Other files ignored: {indexed.ignored_file_count}")
+            st.write(f"Total chunks: {indexed.chunk_count}")
+            st.write(f"Collection: {indexed.collection_name}")
+            st.write(f"Retrieval mode: {retrieval_mode}")
 
-            except Exception as exc:
-                st.error(f"Indexing failed: {exc}")
+        except Exception as exc:
+            st.error(f"Indexing failed: {exc}")
 
     st.divider()
 

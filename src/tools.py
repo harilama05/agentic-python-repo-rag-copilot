@@ -7,6 +7,7 @@ from src.retriever import CodeRetriever, CodeSearchResult
 from src.reranker import CrossEncoderReranker, NoOpReranker
 from src.settings import (
     CROSS_ENCODER_CANDIDATE_K,
+    DEFAULT_CANDIDATE_K,
     DEFAULT_TOP_K,
     RETRIEVAL_MODE_ACCURATE,
     RETRIEVAL_MODE_FAST,
@@ -67,19 +68,33 @@ class CodebaseTools:
         else:
             self.reranker = NoOpReranker()
 
-    def search_code(self, query: str, top_k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
+    def search_code(
+        self,
+        query: str,
+        top_k: int = DEFAULT_TOP_K,
+        query_type: str | None = None,
+    ) -> List[Dict[str, Any]]:
         """
         Search indexed repository chunks using hybrid retrieval.
         This can return both code and documentation chunks.
+
+        query_type is produced by the LLM Query Router.
+        For example:
+        - documentation_query
+        - location_query
+        - caller_query
+        - callee_query
+        - impact_query
         """
         if self.retrieval_mode == RETRIEVAL_MODE_ACCURATE:
-            candidate_k = max(CROSS_ENCODER_CANDIDATE_K, top_k)
+            candidate_k = max(CROSS_ENCODER_CANDIDATE_K, DEFAULT_CANDIDATE_K, top_k)
         else:
-            candidate_k = top_k
+            candidate_k = max(DEFAULT_CANDIDATE_K, top_k)
 
         raw_results = self.retriever.search_code(
             query=query,
             top_k=candidate_k,
+            query_type=query_type,
         )
 
         formatted_results = [

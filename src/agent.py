@@ -331,17 +331,36 @@ class CodebaseAgent:
         sources = []
 
         for result in search_results:
+            relative_path = result.get("relative_path") or result.get("file_path") or ""
+            start_line = result.get("start_line") or result.get("line_start")
+            end_line = result.get("end_line") or result.get("line_end")
+
+            symbol = (
+                result.get("qualified_name")
+                or result.get("symbol")
+                or result.get("heading")
+                or relative_path
+            )
+
+            source_type = (
+                result.get("symbol_type")
+                or result.get("source_type")
+                or result.get("type")
+                or "unknown"
+            )
+
             lines.append(
-                f"- `{result['relative_path']}:{result['start_line']}-{result['end_line']}` "
-                f"— `{result['qualified_name']}` ({result['symbol_type']})"
+                f"- `{relative_path}:{start_line}-{end_line}` "
+                f"— `{symbol}` ({source_type})"
             )
 
             sources.append(
                 {
-                    "relative_path": result["relative_path"],
-                    "line_start": result["start_line"],
-                    "line_end": result["end_line"],
-                    "symbol": result["qualified_name"],
+                    "relative_path": relative_path,
+                    "line_start": start_line,
+                    "line_end": end_line,
+                    "symbol": symbol,
+                    "type": source_type,
                 }
             )
 
@@ -355,8 +374,15 @@ class CodebaseAgent:
         )
     
     def _answer_documentation_query(self, question: str) -> AgentResponse:
-        tools_used = [f'search_code("{question}")']
-        search_results = self.tools.search_code(question, top_k=DOCUMENTATION_TOP_K)
+        tools_used = [
+            f'search_code("{question}", top_k={DOCUMENTATION_TOP_K}, query_type="{QUERY_TYPE_DOCUMENTATION}")'
+        ]
+
+        search_results = self.tools.search_code(
+            query=question,
+            top_k=DOCUMENTATION_TOP_K,
+            query_type=QUERY_TYPE_DOCUMENTATION,
+        )
 
         if not search_results:
             answer = (
@@ -377,19 +403,28 @@ class CodebaseAgent:
         sources = []
 
         for result in search_results:
-            source_type = result.get("source_type") or "unknown"
-            symbol = result.get("qualified_name") or result.get("heading")
+            source_type = result.get("source_type") or result.get("type") or "unknown"
+            symbol = (
+                result.get("qualified_name")
+                or result.get("symbol")
+                or result.get("heading")
+                or result.get("relative_path")
+            )
+
+            relative_path = result.get("relative_path") or result.get("file_path") or ""
+            start_line = result.get("start_line") or result.get("line_start")
+            end_line = result.get("end_line") or result.get("line_end")
 
             lines.append(
-                f"- `{result['relative_path']}:{result['start_line']}-{result['end_line']}` "
+                f"- `{relative_path}:{start_line}-{end_line}` "
                 f"— `{symbol}` ({source_type})"
             )
 
             sources.append(
                 {
-                    "relative_path": result["relative_path"],
-                    "line_start": result["start_line"],
-                    "line_end": result["end_line"],
+                    "relative_path": relative_path,
+                    "line_start": start_line,
+                    "line_end": end_line,
                     "symbol": symbol,
                     "type": source_type,
                 }

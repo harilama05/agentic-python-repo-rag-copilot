@@ -13,6 +13,11 @@ from src.settings import (
     VECTOR_WEIGHT,
 )
 
+from src.constants import (
+    DOCUMENTATION_QUERY_TYPE,
+    DOCUMENTATION_QUERY_BOOST,
+)
+
 
 @dataclass
 class CodeSearchResult:
@@ -74,6 +79,22 @@ def _score_symbol_match(query: str, metadata: Dict[str, Any]) -> float:
 
     return min(score, 1.0)
 
+def _is_documentation_result(metadata: Dict[str, Any]) -> bool:
+    relative_path = str(
+        metadata.get("relative_path")
+        or metadata.get("file_path")
+        or ""
+    ).lower()
+
+    source_type = str(metadata.get("source_type") or "").lower()
+
+    return (
+        source_type in {"documentation", "doc", "markdown"}
+        or relative_path.endswith((".md", ".markdown"))
+        or "readme" in relative_path
+        or "/docs/" in relative_path
+        or "\\docs\\" in relative_path
+    )
 
 def _normalize_scores(scores: List[float]) -> List[float]:
     if not scores:
@@ -186,6 +207,7 @@ class CodeRetriever:
         query: str,
         top_k: int = DEFAULT_TOP_K,
         candidate_k: int = DEFAULT_CANDIDATE_K,
+        query_type: str | None = None,
     ) -> List[CodeSearchResult]:
         vector_results: List[Dict[str, Any]] = self.vector_store.search(
             query=query,
@@ -217,11 +239,17 @@ class CodeRetriever:
             keyword_score = _score_keyword_match(query, document)
             symbol_score = _score_symbol_match(query, metadata)
 
+            documentation_boost = 0.0
+
+            if query_type == DOCUMENTATION_QUERY_TYPE and _is_documentation_result(metadata):
+                documentation_boost = DOCUMENTATION_QUERY_BOOST
+
             final_score = (
                 VECTOR_WEIGHT * vector_score
                 + BM25_WEIGHT * bm25_score
                 + SYMBOL_WEIGHT * symbol_score
                 + KEYWORD_WEIGHT * keyword_score
+                + documentation_boost
             )
 
             chunk_id = (
