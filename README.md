@@ -1,524 +1,514 @@
-# Agentic RAG Copilot for Python Repositories
+# Agentic Python Repo RAG Copilot
 
-A read-only AI copilot for Python repositories.
+Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases.
 
-This project indexes Python repositories, retrieves relevant code and documentation, and answers repository questions using an agentic RAG pipeline. It supports code search, documentation QA, source-grounded answers, Cross-Encoder reranking, LLM-based query routing, and AST-based Graph RAG for code relationship and impact-analysis questions.
+The system indexes Python source code and documentation, builds a code graph, stores structured metadata in PostgreSQL, stores vector embeddings in Qdrant, and answers repository questions using Retrieval-Augmented Generation, Graph RAG, hybrid retrieval, Cross-Encoder reranking, and an LLM-based query planner.
+
+It can answer questions such as:
+
+- What does this project do?
+- Where is `ModelEvaluator` defined?
+- What does `ModelEvaluator` do?
+- Who calls `TaskService.create_task`?
+- What will be affected if `TaskService.create_task` is removed?
+- Where is a function used?
+- Explain this class and show where it is implemented.
+- `ModelEvaluator` được tạo ở đâu, mục đích code là gì?
 
 ---
 
 ## Features
 
-### Repository QA
+### Repository ingestion
 
-The assistant can answer questions such as:
+The app can index repositories from multiple sources:
 
-```text
-Where is create_user implemented?
-Where is create_user used?
-What does UserService do?
-Dự án này dùng để làm gì?
-Tech stack của dự án là gì?
-TaskService.create_task được gọi bởi ai?
-Nếu xóa TaskService.create_task thì ảnh hưởng gì?
-Nếu bỏ method tạo task thì chỗ nào bị ảnh hưởng?
-```
+1. **Company repositories**
+   - Preconfigured repositories managed by the project owner/admin.
+   - Stored as persistent repositories.
 
-The system supports both English and Vietnamese questions.
+2. **Custom local repositories**
+   - A user can provide a local repository path.
+   - Useful for local testing.
 
----
-
-## Repository Modes
-
-The current app supports two repository modes:
-
-### 1. Custom Repo Mode
-
-Use this mode to index a local Python repository by entering its local path.
-
-Example:
-
-```text
-examples/sample_python_repo
-```
-
-### 2. Company Repo Mode
-
-Use this mode to select a predefined company-style repository included in the project.
-
-Example:
-
-```text
-TaskFlow API
-```
-
-This mode simulates how new interns or new team members can ask questions about existing company repositories.
+3. **Public GitHub repositories**
+   - A user can enter a public GitHub URL.
+   - The app clones the repository into `data/runtime/github/`.
+   - Runtime GitHub folders are temporary and are not committed to Git.
 
 ---
 
-## Current Input Scope
+## Core capabilities
 
-The current version indexes:
+### 1. Code-aware retrieval
 
-```text
-.py files
-README.md / README.markdown
-docs/*.md / docs/*.markdown
-```
+The project indexes:
 
-It ignores files such as:
+- Python files
+- Markdown documentation such as `README.md`
+- Function, class, and method chunks
+- Metadata such as file path, line range, symbol name, symbol type, and heading
 
-```text
-.git/
-.venv/
-venv/
-__pycache__/
-node_modules/
-dist/
-build/
-IDE/cache folders
-binary or unsupported files
-```
-
-The app is read-only and does not execute user repository code.
-
----
-
-## RAG Pipeline
-
-The pipeline currently includes:
-
-```text
-Repository scan
-→ Python AST parsing
-→ Code/document chunking
-→ Embedding
-→ Chroma vector store
-→ Hybrid retrieval
-→ Optional Cross-Encoder reranking
-→ LLM Query Router
-→ Agent tool selection
-→ Graph RAG when needed
-→ Source excerpt construction
-→ LLM grounded answer generation
-→ Sources shown in UI
-```
-
----
-
-## Retrieval Modes
-
-The app supports two retrieval modes.
-
-### Fast Mode
+### 2. Hybrid retrieval
 
 Fast mode uses:
 
-```text
-Vector search
-+ BM25
-+ keyword score
-+ symbol-aware score
-```
+- Qdrant vector search
+- BM25 lexical scoring
+- Keyword overlap scoring
+- Symbol-aware scoring
+- Documentation boosting for documentation queries
 
-This mode is faster and is suitable for most normal repository QA.
-
-### Accurate Mode
+### 3. Cross-Encoder reranking
 
 Accurate mode uses:
 
-```text
-Hybrid retrieval
-→ candidate chunks
-→ Cross-Encoder reranking
-→ final top-k chunks
-```
+- Hybrid retrieval to collect candidates
+- Cross-Encoder reranking to improve result relevance
 
-This mode can improve retrieval quality, especially for ambiguous questions, but it is slower on CPU-only machines.
+This mode is slower than Fast mode but can improve answer quality for vague or natural-language questions.
 
-The Cross-Encoder is used only in retrieval/search steps. The rest of the pipeline, including LLM routing, Graph RAG, source excerpts, and answer generation, is shared by both Fast and Accurate modes.
+### 4. Graph RAG
 
----
+The system builds a code graph from Python AST analysis.
 
-## LLM Query Router
+The graph supports:
 
-The system uses an LLM Query Router to understand each user question before selecting tools.
-
-The router returns a query plan containing:
-
-```text
-query_type
-symbol
-rewritten_query
-confidence
-reason
-```
-
-Supported query types include:
-
-```text
-documentation_query
-location_query
-reference_query
-explanation_query
-search_query
-caller_query
-callee_query
-impact_query
-flow_query
-```
-
-Examples:
-
-```text
-"Where is create_task implemented?"
-→ location_query
-→ symbol: create_task
-
-"TaskService.create_task được gọi bởi ai?"
-→ caller_query
-→ symbol: TaskService.create_task
-
-"Nếu bỏ method tạo task thì chỗ nào bị ảnh hưởng?"
-→ impact_query
-→ symbol: None
-→ rewritten_query: task creation method impact analysis
-```
-
-If the LLM router is unavailable or rate-limited, the system falls back to a rule-based router.
-
----
-
-## Graph RAG / Code Graph
-
-The project includes a lightweight AST-based Code Graph layer.
-
-The graph contains:
-
-```text
-Nodes:
-- functions
-- classes
-- methods
-
-Edges:
-- class contains method
-- function/method calls function/method
-```
-
-Graph tools include:
-
-```text
-find_callers(symbol)
-find_callees(symbol)
-impact_analysis(symbol)
-```
-
-This enables questions such as:
-
-```text
-Who calls this method?
-What functions does this function call?
-What may be affected if this method is removed or changed?
-```
+- Finding callers of a symbol
+- Finding callees of a symbol
+- Analyzing impact if a function/class/method changes
+- Resolving graph-related questions through retrieved symbols when the user does not provide an exact symbol
 
 Example:
 
 ```text
-Question:
 TaskService.create_task được gọi bởi ai?
-
-Graph result:
-TaskService.create_task is called by create_task in app/api/tasks.py.
 ```
 
-For natural-language graph questions without an explicit symbol, the system first resolves the likely target symbol through repository search.
+The system can answer this using the code graph instead of relying only on semantic search.
+
+### 5. LLM Query Planner
+
+The app uses an LLM-based query planner.
+
+Instead of only classifying a question into one query type, the planner can decompose a user question into one or more query plans.
 
 Example:
 
 ```text
-Question:
-Nếu bỏ method tạo task thì chỗ nào bị ảnh hưởng?
-
-Router:
-impact_query, symbol=None
-
-Symbol resolution:
-search_code("task creation method")
-→ TaskService.create_task
-
-Graph analysis:
-impact_analysis("TaskService.create_task")
+ModelEvaluator được tạo ở đâu, mục đích code là gì?
 ```
 
-In Accurate mode, this symbol resolution step can use Cross-Encoder reranking.
+The planner can produce:
+
+```json
+{
+  "plans": [
+    {
+      "query_type": "location_query",
+      "symbol": "ModelEvaluator"
+    },
+    {
+      "query_type": "explanation_query",
+      "symbol": "ModelEvaluator"
+    }
+  ]
+}
+```
+
+Then the agent executes each plan, merges the sources, and generates a grounded answer.
+
+Single-intent questions still work normally. They simply produce one query plan.
+
+### 6. Grounded LLM answer generation
+
+After retrieval or graph analysis, the system can use Gemini to generate a natural-language answer grounded in tool results.
+
+If the LLM is unavailable or quota is exhausted, the app falls back to tool-based answers.
 
 ---
 
-## Source-Grounded Answers
+## Query types
 
-The app displays sources separately from the generated answer.
+| Query type | Purpose |
+|---|---|
+| `documentation_query` | Project purpose, README, setup, usage, architecture overview |
+| `location_query` | Where a function/class/method is defined or implemented |
+| `explanation_query` | What a function/class/method does |
+| `reference_query` | Where a symbol is used or referenced |
+| `caller_query` | Who calls a function or method |
+| `callee_query` | What a function or method calls |
+| `impact_query` | What may be affected if a symbol changes |
+| `flow_query` | Execution flow, request flow, or call chain |
+| `search_query` | General semantic code search |
+| `multi_intent_query` | A question decomposed into multiple query plans |
 
-Sources include:
+---
 
-```text
-file path
-line range
-symbol name
-source excerpt
-```
+## Storage architecture
+
+The project uses two storage layers.
+
+### PostgreSQL
+
+PostgreSQL stores structured metadata:
+
+- Repositories
+- Chunks
+- Code graph nodes
+- Code graph edges
+
+This allows the system to persist repository metadata and reconstruct code graph data after restart.
+
+### Qdrant
+
+Qdrant stores vector embeddings for code and documentation chunks.
+
+A single Qdrant collection can store chunks from multiple repositories. Each vector point is filtered by `repo_id`.
+
+### Runtime folders
+
+Runtime folders are created automatically when needed.
 
 Example:
 
 ```text
-app/api/tasks.py:9-11 — create_task
-app/services/task_service.py:11-17 — TaskService.create_task
+data/runtime/github/
 ```
 
-The LLM answer is generated from retrieved context, graph results, and source excerpts.
+This folder contains cloned GitHub repositories during local indexing.
 
-If LLM answer generation is unavailable or rate-limited, the app shows a concise warning and falls back to a tool/retrieval-based answer.
+It should not be committed to Git.
 
 ---
 
-## Tech Stack
+## Tech stack
 
-```text
-Python
-Streamlit
-ChromaDB
-sentence-transformers
-Cross-Encoder reranking
-rank-bm25
-Google Gemini API
-Python AST
-Pydantic / dataclasses
-```
-
-Main retrieval components:
-
-```text
-Bi-Encoder embeddings for semantic retrieval
-BM25 for lexical retrieval
-Cross-Encoder for optional reranking
-AST-based code graph for Graph RAG
-LLM Query Router for tool selection
-```
+- Python 3.10
+- Streamlit
+- PostgreSQL
+- Qdrant
+- SQLAlchemy
+- Sentence Transformers
+- BM25
+- Cross-Encoder reranking
+- Gemini API
+- Docker Compose
+- Git
 
 ---
 
-## Project Structure
+## Project structure
 
 ```text
-.
+agentic-python-repo-rag-copilot/
 ├── app/
 │   └── streamlit_app.py
-│
 ├── data/
-│   └── eval_cases.json
-│
+│   └── runtime/
+│       └── github/
 ├── examples/
 │   ├── sample_python_repo/
 │   └── company_repos/
-│       └── taskflow_api/
-│
 ├── scripts/
+│   ├── init_db.py
 │   ├── run_eval.py
-│   ├── index_repo.py
-│   ├── test_llm_router.py
-│   └── test_code_graph.py
-│
+│   ├── test_storage_connections.py
+│   ├── test_qdrant_vector_store.py
+│   ├── test_github_ingestion.py
+│   ├── inspect_metadata_records.py
+│   ├── inspect_qdrant_records.py
+│   ├── test_load_code_graph_from_db.py
+│   └── test_multi_intent_router.py
 ├── src/
 │   ├── agent.py
-│   ├── ast_parser.py
-│   ├── chunker.py
 │   ├── code_graph.py
-│   ├── company_repos.py
 │   ├── config.py
 │   ├── constants.py
 │   ├── doc_chunker.py
 │   ├── embeddings.py
-│   ├── evaluator.py
 │   ├── indexer.py
 │   ├── llm.py
 │   ├── prompts.py
+│   ├── qdrant_vector_store.py
 │   ├── query_router.py
 │   ├── reranker.py
 │   ├── retriever.py
-│   ├── scanner.py
 │   ├── settings.py
 │   ├── tools.py
-│   └── vector_store.py
-│
+│   ├── db/
+│   ├── ingestion/
+│   └── storage/
+├── docker-compose.yml
+├── requirements.txt
 ├── .env.example
 ├── .gitignore
-├── README.md
-└── requirements.txt
+└── README.md
 ```
 
 ---
 
-## Setup
+## Requirements
+
+Install these first:
+
+- Python 3.10
+- Git
+- Docker Desktop
+- Visual Studio Code or another editor
+
+Docker Desktop is required because PostgreSQL and Qdrant run in Docker containers during local development.
+
+---
+
+## Environment variables
+
+Create a `.env` file in the project root.
+
+Example:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+LLM_BACKEND=gemini
+
+DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
+
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION=code_chunks
+```
+
+Important:
+
+- Do not commit `.env`.
+- Commit `.env.example` instead.
+- Make sure the PostgreSQL port in `DATABASE_URL` matches your `docker-compose.yml`.
+- If your Docker Compose maps `5432:5432`, use `localhost:5432`.
+- If your Docker Compose maps `55432:5432`, use `localhost:55432`.
+
+---
+
+## Local setup
 
 ### 1. Clone the repository
 
-```bash
-git clone https://github.com/your-username/agentic-python-repo-rag-copilot.git
+```powershell
+git clone https://github.com/<your-username>/<your-repo>.git
 cd agentic-python-repo-rag-copilot
 ```
 
-### 2. Create a virtual environment
+### 2. Create a Python 3.10 virtual environment
 
-```bash
-python -m venv .venv
-```
-
-Activate it on Windows:
-
-```bash
+```powershell
+py -3.10 -m venv .venv
 .venv\Scripts\activate
-```
-
-Activate it on macOS/Linux:
-
-```bash
-source .venv/bin/activate
 ```
 
 ### 3. Install dependencies
 
-```bash
-pip install -r requirements.txt
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-If PyTorch is not installed correctly on a CPU-only machine, install the CPU build:
+### 4. Start PostgreSQL and Qdrant
 
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-```
-
-### 4. Create `.env`
-
-Copy:
-
-```bash
-cp .env.example .env
-```
-
-On Windows PowerShell:
+Make sure Docker Desktop is running.
 
 ```powershell
-Copy-Item .env.example .env
+docker compose up -d
 ```
 
-Example `.env`:
+Check containers:
 
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-LLM_BACKEND=gemini
+```powershell
+docker ps
 ```
 
-You may use another supported Gemini model depending on your quota and availability.
+You should see containers for PostgreSQL and Qdrant.
 
----
+### 5. Initialize database tables
 
-## Run the App
+```powershell
+python -m scripts.init_db
+```
 
-```bash
+### 6. Test storage connections
+
+```powershell
+python -m scripts.test_storage_connections
+```
+
+Expected output:
+
+```text
+PostgreSQL connection OK: 1
+Qdrant connection OK
+Collections: [...]
+```
+
+### 7. Run the Streamlit app
+
+```powershell
 python -m streamlit run app/streamlit_app.py
 ```
 
-Then open the Streamlit URL shown in the terminal.
+---
+
+## How to use
+
+### Company repository mode
+
+Use this mode for predefined repositories inside the project.
+
+1. Select `Company Repo`
+2. Choose a repository
+3. Select retrieval mode:
+   - Fast
+   - Accurate
+4. Click `Index repository`
+5. Ask questions
+
+Example:
+
+```text
+TaskService.create_task được gọi bởi ai?
+```
+
+### Custom local repository mode
+
+Use this mode for a local path on your machine.
+
+1. Select `Custom Repo`
+2. Enter local repository path
+3. Click `Index repository`
+4. Ask questions
+
+### GitHub URL mode
+
+Use this mode for public GitHub repositories.
+
+1. Select `GitHub URL`
+2. Enter a public GitHub URL
+
+Example:
+
+```text
+https://github.com/owner/repo
+```
+
+3. Optionally enter a branch
+4. Click `Index repository`
+5. Ask questions
+
+The repository is cloned into:
+
+```text
+data/runtime/github/
+```
+
+This folder is created automatically and is ignored by Git.
 
 ---
 
-## How to Use
+## Retrieval modes
 
-### 1. Select Repository Mode
+### Fast mode
 
-Choose one:
+Fast mode uses hybrid retrieval:
 
-```text
-Custom Repo
-Company Repo
-```
+- Qdrant vector search
+- BM25
+- Keyword overlap
+- Symbol-aware scoring
+- Documentation boosting
 
-### 2. Select Retrieval Mode
+This mode is faster and works well for most questions.
 
-Choose one:
+### Accurate mode
 
-```text
-Fast - Hybrid retrieval
-Accurate - Cross-Encoder reranking
-```
+Accurate mode uses:
 
-### 3. Index the Repository
+- Hybrid retrieval
+- Cross-Encoder reranking
 
-Click:
+This mode is slower but often improves result quality.
 
-```text
-Index repository
-```
+---
 
-The app will show:
+## Example questions
 
-```text
-Python files indexed
-Documentation files indexed
-Ignored files
-Total chunks
-Collection name
-Retrieval mode
-```
-
-### 4. Ask Questions
-
-Example questions:
+### Project documentation
 
 ```text
-Where is create_user implemented?
-Where is create_user used?
-What does UserService do?
 Dự án này dùng để làm gì?
-Where is create_task implemented?
+```
+
+```text
+What does this project do?
+```
+
+### Symbol location
+
+```text
+ModelEvaluator được tạo ở đâu?
+```
+
+```text
+Where is ModelEvaluator defined?
+```
+
+### Symbol explanation
+
+```text
+ModelEvaluator có tác dụng gì?
+```
+
+```text
+Explain ModelEvaluator.
+```
+
+### Multi-intent question
+
+```text
+ModelEvaluator được tạo ở đâu, mục đích code là gì?
+```
+
+The agent can decompose this into:
+
+- `location_query`
+- `explanation_query`
+
+### Caller query
+
+```text
 TaskService.create_task được gọi bởi ai?
-Nếu xóa TaskService.create_task thì ảnh hưởng gì?
-Nếu bỏ method tạo task thì chỗ nào bị ảnh hưởng?
+```
+
+### Impact query
+
+```text
+Nếu xóa TaskService.create_task thì chỗ nào bị ảnh hưởng?
+```
+
+### Reference query
+
+```text
+ModelEvaluator được dùng ở đâu?
 ```
 
 ---
 
 ## Evaluation
 
-The project includes a lightweight evaluation script for retrieval and agent workflow correctness.
+Run the evaluation script:
 
-Run:
-
-```bash
+```powershell
 python -m scripts.run_eval
 ```
 
-The evaluation currently covers:
-
-```text
-code-level queries
-documentation queries
-Vietnamese and English questions
-company repo questions
-caller queries
-impact-analysis queries
-natural-language graph queries
-```
-
-Metrics:
-
-```text
-Query type accuracy
-Average source recall
-Expected sources all found rate
-```
-
-Current result:
+Example expected output:
 
 ```text
 Overall Evaluation Summary
@@ -526,196 +516,158 @@ Number of cases:                 16
 Query type accuracy:             100.00%
 Average source recall:           100.00%
 Expected sources all found rate: 100.00%
-
-Evaluation Summary - sample_python_repo
-Number of cases:                 6
-Query type accuracy:             100.00%
-Average source recall:           100.00%
-Expected sources all found rate: 100.00%
-
-Evaluation Summary - taskflow_api
-Number of cases:                 10
-Query type accuracy:             100.00%
-Average source recall:           100.00%
-Expected sources all found rate: 100.00%
 ```
 
-The reported result is measured only on a curated evaluation set across the included sample repositories. It should not be interpreted as universal accuracy on arbitrary real-world repositories.
+The current evaluation covers:
 
-The evaluation focuses on:
+- Query type routing
+- Source recall
+- Expected source matching
+- Graph RAG cases
+- Documentation retrieval cases
 
-```text
-query routing correctness
-source retrieval correctness
-graph query source coverage
-file path and line number correctness
+---
+
+## Useful scripts
+
+### Test storage connections
+
+```powershell
+python -m scripts.test_storage_connections
 ```
 
-It does not yet fully evaluate:
+### Test Qdrant vector store
 
-```text
-LLM answer quality
-hallucination rate
-large production repositories
-latency
-multi-user behavior
+```powershell
+python -m scripts.test_qdrant_vector_store
+```
+
+### Inspect PostgreSQL metadata
+
+```powershell
+python -m scripts.inspect_metadata_records
+```
+
+### Inspect Qdrant records
+
+```powershell
+python -m scripts.inspect_qdrant_records
+```
+
+### Test loading code graph from PostgreSQL
+
+```powershell
+python -m scripts.test_load_code_graph_from_db
+```
+
+### Test GitHub ingestion
+
+```powershell
+python -m scripts.test_github_ingestion
+```
+
+### Test multi-intent router
+
+```powershell
+python -m scripts.test_multi_intent_router
 ```
 
 ---
 
-## Example Pipeline Behavior
+## Git ignore policy
 
-### Documentation Question
+Do not commit local runtime data, secrets, virtual environments, or database storage.
 
-```text
-Question:
-Dự án này dùng để làm gì?
+Recommended `.gitignore` entries:
 
-Router:
-documentation_query
+```gitignore
+.venv/
+.env
+__pycache__/
+*.pyc
 
-Tool:
-search_code(...)
+data/runtime/
+data/index/
+data/chroma/
 
-Answer:
-The assistant answers using README/project documentation sources.
+postgres_data/
+qdrant_data/
 ```
 
-### Caller Query
-
-```text
-Question:
-TaskService.create_task được gọi bởi ai?
-
-Router:
-caller_query
-
-Tool:
-find_callers("TaskService.create_task")
-
-Answer:
-TaskService.create_task is called by create_task in app/api/tasks.py.
-```
-
-### Impact Query
-
-```text
-Question:
-TaskService.create_task nếu xóa thì sẽ ảnh hưởng gì?
-
-Router:
-impact_query
-
-Tool:
-impact_analysis("TaskService.create_task")
-
-Answer:
-The API handler create_task may be affected because it creates TaskService and calls service.create_task(...).
-```
-
-### Natural-Language Graph Query
-
-```text
-Question:
-Nếu bỏ method tạo task thì chỗ nào bị ảnh hưởng?
-
-Router:
-impact_query
-symbol=None
-
-Symbol resolution:
-search_code("task creation method")
-
-Resolved symbol:
-TaskService.create_task
-
-Tool:
-impact_analysis("TaskService.create_task")
-```
+Runtime folders such as `data/runtime/github/` are created automatically when indexing GitHub repositories.
 
 ---
 
-## Limitations
+## Notes about LLM usage
 
-Current limitations:
+The app can still return fallback tool-based answers when LLM generation is unavailable.
 
-```text
-- Only Python source files are parsed as code.
-- Markdown documentation support is limited to README and docs/*.md.
-- The code graph is static and AST-based.
-- It does not execute repository code.
-- Dynamic Python calls may not be fully resolved.
-- Cross-file/type inference is lightweight.
-- LLM routing and answer generation depend on Gemini API quota.
-- No persistent database layer yet.
-- No GitHub URL ingestion yet.
-- No ZIP upload ingestion yet.
-- No FastAPI backend or separate frontend yet.
-```
+The LLM is used for:
 
-The current app is a local Streamlit-based prototype with strong RAG and code understanding features, not a fully deployed production system.
+- Query planning
+- Query rewriting
+- Final grounded answer generation
 
----
+Local components are used for:
 
-## Roadmap
+- Embeddings
+- Vector search
+- BM25
+- Cross-Encoder reranking
+- Code graph analysis
+- Fallback answers
 
-Planned next improvements:
-
-```text
-1. Remove unused legacy code after LLM Query Router migration
-2. Add GitHub public repository URL ingestion
-3. Add ZIP upload ingestion
-4. Add persistent metadata database
-5. Add persistent vector database
-6. Add FastAPI backend
-7. Add separate frontend
-8. Add admin/user roles
-9. Store company repositories in database
-10. Add deployment support
-```
-
-Future product architecture:
-
-```text
-Frontend
-→ FastAPI backend
-→ repository ingestion service
-→ metadata database
-→ vector database
-→ LLM Query Router
-→ hybrid retrieval / Cross-Encoder reranking
-→ Graph RAG
-→ source-grounded LLM answer
-```
+If Gemini quota is exhausted, the app may still answer using retrieval and graph tools, but the final answer may be less natural.
 
 ---
 
-## Safety and Repository Handling
+## Current status
 
-The system is read-only.
+Implemented:
 
-It does not:
+- Python code indexing
+- Markdown documentation indexing
+- PostgreSQL metadata storage
+- Qdrant vector storage
+- Fast hybrid retrieval
+- Accurate Cross-Encoder reranking
+- Graph RAG
+- GitHub public repository ingestion
+- Code graph persistence and reload from PostgreSQL
+- LLM query planner
+- Multi-intent query execution
+- Streamlit UI
+- Evaluation script
 
-```text
-execute repository code
-modify repository files
-run tests from user repositories
-install packages from indexed repositories
-```
+Planned improvements:
 
-It only reads supported text files, chunks them, embeds them, and uses them for retrieval and question answering.
+- ZIP upload ingestion
+- FastAPI backend
+- Frontend deployment
+- Cloud PostgreSQL such as Neon
+- Cloud Qdrant
+- User/admin authentication
+- Repository management dashboard
+- Background indexing jobs
+- Better support for larger repositories
 
 ---
 
-## Notes on LLM Quota
+## Deployment direction
 
-The app uses Gemini for:
+The current version is designed to run locally with Docker.
 
-```text
-LLM Query Router
-LLM grounded answer generation
-```
+A production deployment can use:
 
-This means one user question may require multiple LLM calls.
+- Vercel for frontend
+- Render for backend
+- Neon for PostgreSQL
+- Qdrant Cloud for vector database
 
-If the model is rate-limited or quota is exhausted, the app falls back to tool/retrieval-based answers and shows a concise warning in the UI. Detailed provider errors are kept in Raw Results for debugging.
+In production, temporary repository cloning should happen on the backend server, while persistent metadata and vectors should be stored in cloud databases.
+
+---
+
+## License
+
+This project is intended for educational and portfolio use.

@@ -11,6 +11,7 @@ from src.constants import (
     QUERY_TYPE_EXPLANATION,
     QUERY_TYPE_IMPACT,
     QUERY_TYPE_LOCATION,
+    QUERY_TYPE_MULTI_INTENT,
     QUERY_TYPE_REFERENCE,
     QUERY_TYPE_SEARCH,
 )
@@ -41,8 +42,20 @@ class CodebaseAgent:
         self.use_llm = use_llm
 
     def answer(self, question: str) -> AgentResponse:
-        query_plan = self.query_router.route(question)
+        query_plans = self.query_router.route_many(question)
 
+        response = self._answer_planned_query(
+            question=question,
+            query_plans=query_plans,
+        )
+
+        return self._maybe_generate_llm_answer(response)
+
+    def _answer_single_plan(
+        self,
+        question: str,
+        query_plan: QueryPlan,
+    ) -> AgentResponse:
         query_type = query_plan.query_type
         symbol = query_plan.symbol
         effective_question = query_plan.rewritten_query or question
@@ -55,11 +68,6 @@ class CodebaseAgent:
             QUERY_TYPE_IMPACT,
         }
 
-        # If this is a graph query but the router could not extract a concrete
-        # symbol, resolve the symbol through repository search first.
-        #
-        # This automatically uses Fast or Accurate mode because search_code()
-        # lives inside CodebaseTools.
         if query_type in graph_query_types and not symbol:
             symbol, symbol_resolution = self._resolve_symbol_for_graph_query(
                 query=effective_question,
@@ -105,7 +113,120 @@ class CodebaseAgent:
         if symbol_resolution is not None:
             response.raw_results["symbol_resolution"] = symbol_resolution
 
-        return self._maybe_generate_llm_answer(response)
+        return response
+    
+    def _dedupe_sources(
+        self,
+        sources: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        deduped = []
+        seen = set()
+
+        for source in sources:
+            key = (
+                source.get("relative_path"),
+                source.get("line_start"),
+                source.get("line_end"),
+                source.get("symbol"),
+                source.get("type"),
+                source.get("role"),
+            )
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            deduped.append(source)
+
+        return deduped
+    
+    def _answer_planned_query(
+        self,
+        question: str,
+        query_plans: List[QueryPlan],
+    ) -> AgentResponse:
+        if not query_plans:
+            response = self._answer_search_query(question)
+            response.raw_results["query_plans"] = []
+            response.raw_results["plan_count"] = 0
+            return response
+
+        sub_responses: List[AgentResponse] = []
+
+        for plan in query_plans:
+            sub_response = self._answer_single_plan(
+                question=question,
+                query_plan=plan,
+            )
+            sub_responses.append(sub_response)
+
+        tools_used: List[str] = []
+        sources: List[Dict[str, Any]] = []
+        raw_sub_responses = []
+
+        for index, sub_response in enumerate(sub_responses, start=1):
+            plan = query_plans[index - 1]
+
+            tools_used.extend(sub_response.tools_used)
+            sources.extend(sub_response.sources)
+
+            raw_sub_responses.append(
+                {
+                    "query_plan": asdict(plan),
+                    "query_type": sub_response.query_type,
+                    "tools_used": sub_response.tools_used,
+                    "sources": sub_response.sources,
+                    "raw_results": sub_response.raw_results,
+                    "fallback_answer": sub_response.answer,
+                }
+            )
+
+        deduped_tools = list(dict.fromkeys(tools_used))
+        deduped_sources = self._dedupe_sources(sources)
+
+        source_excerpts = self._build_source_excerpts(
+            deduped_sources,
+            context_lines=1,
+        )
+
+        if len(query_plans) == 1:
+            fallback_answer = sub_responses[0].answer
+            query_type = sub_responses[0].query_type
+        else:
+            fallback_lines = ["I decomposed your question into multiple codebase tasks:"]
+
+            for index, sub_response in enumerate(sub_responses, start=1):
+                plan = query_plans[index - 1]
+
+                fallback_lines.append("")
+                fallback_lines.append(f"### Part {index}: `{plan.query_type}`")
+
+                if plan.symbol:
+                    fallback_lines.append(f"Symbol: `{plan.symbol}`")
+
+                fallback_lines.append(sub_response.answer)
+
+            fallback_answer = "\n".join(fallback_lines)
+            query_type = QUERY_TYPE_MULTI_INTENT
+
+        raw_results = {
+            "query_plans": [asdict(plan) for plan in query_plans],
+            "sub_responses": raw_sub_responses,
+            "source_excerpts": source_excerpts,
+            "plan_count": len(query_plans),
+        }
+
+        if len(query_plans) == 1:
+            raw_results["query_plan"] = asdict(query_plans[0])
+
+        return AgentResponse(
+            question=question,
+            query_type=query_type,
+            answer=fallback_answer,
+            tools_used=deduped_tools,
+            sources=deduped_sources,
+            raw_results=raw_results,
+        )
 
     def _maybe_generate_llm_answer(self, response: AgentResponse) -> AgentResponse:
         """

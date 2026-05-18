@@ -8,7 +8,7 @@ QUERY_TYPE_IMPACT = "impact_query"
 QUERY_TYPE_CALLER = "caller_query"
 QUERY_TYPE_CALLEE = "callee_query"
 QUERY_TYPE_FLOW = "flow_query"
-
+QUERY_TYPE_MULTI_INTENT = "multi_intent_query"
 
 # Source types
 SOURCE_TYPE_CODE = "code"

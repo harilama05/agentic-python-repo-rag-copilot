@@ -108,11 +108,65 @@ JSON schema:
 """
 
 
+PLANNER_SYSTEM_PROMPT = """
+You are an LLM Query Planner for an Agentic RAG assistant that answers questions about Python repositories.
+
+Your job is to decompose the user's question into one or more concrete query plans.
+
+Allowed query_type values:
+- documentation_query: questions about README, project purpose, setup, usage, architecture overview
+- location_query: where a symbol/function/class/method is defined or implemented
+- explanation_query: what a symbol/function/class/method does, its purpose, behavior, or responsibility
+- reference_query: where a symbol is referenced or used
+- caller_query: who calls a function/method
+- callee_query: what a function/method calls
+- impact_query: what may be affected if a symbol changes
+- flow_query: execution flow, request flow, call chain, or how logic moves through components
+- search_query: general semantic code search
+
+Rules:
+1. Always return a JSON object with a "plans" list.
+2. If the user asks one thing, return exactly one plan.
+3. If the user asks multiple things, return multiple plans.
+4. If the user asks "where is X and what does X do", return:
+   - location_query for X
+   - explanation_query for X
+5. If the user asks "who calls X and what is affected if X changes", return:
+   - caller_query for X
+   - impact_query for X
+6. If the user asks "where is X used and where is X defined", return:
+   - reference_query for X
+   - location_query for X
+7. Use symbol only when there is a concrete code symbol.
+8. Do not invent symbols.
+9. Do not translate natural language descriptions into guessed code symbols.
+10. Return valid JSON only. Do not include markdown fences.
+
+JSON schema:
+{
+  "plans": [
+    {
+      "query_type": "location_query",
+      "symbol": "ModelEvaluator",
+      "rewritten_query": "Where is ModelEvaluator defined?",
+      "confidence": 0.95,
+      "reason": "The user asks where ModelEvaluator is defined."
+    }
+  ]
+}
+"""
+
+
 def extract_json_object(text: str) -> dict:
     """
     Extract the first JSON object from an LLM response.
     """
     text = text.strip()
+
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?", "", text)
+        text = re.sub(r"```$", "", text)
+        text = text.strip()
 
     try:
         return json.loads(text)
@@ -144,6 +198,7 @@ def normalize_confidence(value: object) -> float:
 
     return max(0.0, min(1.0, confidence))
 
+
 def is_valid_code_symbol(value: str | None) -> bool:
     if value is None:
         return False
@@ -174,6 +229,7 @@ def is_valid_code_symbol(value: str | None) -> bool:
     # Reject plain lowercase natural-language words like:
     # task, user, service, method, project
     return False
+
 
 def extract_symbol_candidate(question: str) -> Optional[str]:
     """
@@ -223,10 +279,76 @@ def extract_symbol_candidate(question: str) -> Optional[str]:
     return candidates[0][1]
 
 
+def normalize_symbol(
+    raw_symbol: object,
+    *,
+    question: str,
+    rewritten_query: str | None = None,
+) -> Optional[str]:
+    """
+    Normalize and validate a symbol returned by the LLM.
+
+    If the LLM did not return a valid symbol, recover an obvious code-like
+    symbol from the original question or rewritten query.
+    """
+    symbol = raw_symbol
+
+    if symbol is not None:
+        symbol = str(symbol).strip() or None
+
+    if not is_valid_code_symbol(symbol):
+        symbol = None
+
+    if symbol is None and rewritten_query:
+        fallback_symbol = extract_symbol_candidate(rewritten_query)
+
+        if is_valid_code_symbol(fallback_symbol):
+            symbol = fallback_symbol
+
+    if symbol is None:
+        fallback_symbol = extract_symbol_candidate(question)
+
+        if is_valid_code_symbol(fallback_symbol):
+            symbol = fallback_symbol
+
+    return symbol
+
+
+def build_query_plan_from_data(
+    data: dict,
+    *,
+    question: str,
+    router: str,
+) -> QueryPlan:
+    query_type = normalize_query_type(data.get("query_type", QUERY_TYPE_SEARCH))
+
+    rewritten_query = str(
+        data.get("rewritten_query") or question
+    ).strip()
+
+    symbol = normalize_symbol(
+        data.get("symbol"),
+        question=question,
+        rewritten_query=rewritten_query,
+    )
+
+    confidence = normalize_confidence(data.get("confidence", 0.0))
+    reason = str(data.get("reason") or "").strip()
+
+    return QueryPlan(
+        query_type=query_type,
+        symbol=symbol,
+        rewritten_query=rewritten_query,
+        confidence=confidence,
+        reason=reason,
+        router=router,
+    )
+
+
 def rule_based_fallback_route(question: str) -> QueryPlan:
     """
-    Fallback only. The main pipeline should use LLMQueryRouter.
-    This prevents the app from crashing if the LLM router fails.
+    Fallback only. The main pipeline should use LLMQueryRouter.route_many().
+    This prevents the app from crashing if the LLM planner/router fails.
     """
     q = question.lower()
 
@@ -287,6 +409,7 @@ def rule_based_fallback_route(question: str) -> QueryPlan:
         "nằm ở đâu",
         "định nghĩa ở đâu",
         "được implement",
+        "được tạo ở đâu",
     ]):
         query_type = QUERY_TYPE_LOCATION
 
@@ -321,12 +444,23 @@ def rule_based_fallback_route(question: str) -> QueryPlan:
         "làm gì",
         "để làm gì",
         "dùng để làm gì",
+        "mục đích",
         "giải thích",
         "hoạt động như thế nào",
         "chức năng gì",
         "có tác dụng gì",
     ]):
         query_type = QUERY_TYPE_EXPLANATION
+
+    elif any(phrase in q for phrase in [
+        "flow",
+        "request flow",
+        "execution flow",
+        "call chain",
+        "luồng",
+        "quy trình",
+    ]):
+        query_type = QUERY_TYPE_FLOW
 
     else:
         query_type = QUERY_TYPE_SEARCH
@@ -336,22 +470,31 @@ def rule_based_fallback_route(question: str) -> QueryPlan:
         symbol=extract_symbol_candidate(question),
         rewritten_query=question,
         confidence=0.0,
-        reason="Fallback rule-based routing because LLM router failed or was unavailable.",
+        reason="Fallback rule-based routing because LLM router/planner failed or was unavailable.",
         router="fallback_rule",
     )
 
 
 class LLMQueryRouter:
     """
-    Always routes the user's question through an LLM.
+    Main query planner.
 
-    Rule-based routing is used only as a technical fallback if the LLM fails.
+    route_many() is the primary API:
+    - one-intent question -> [one QueryPlan]
+    - multi-intent question -> [multiple QueryPlan objects]
+
+    route() is kept as a compatibility/fallback single-plan router.
     """
 
     def __init__(self, llm: GeminiLLM):
         self.llm = llm
 
     def route(self, question: str) -> QueryPlan:
+        """
+        Compatibility single-plan router.
+
+        The main agent pipeline should call route_many().
+        """
         user_prompt = f"""
 User question:
 {question}
@@ -367,37 +510,9 @@ Return the query plan JSON now.
 
             data = extract_json_object(raw_output)
 
-            query_type = normalize_query_type(data.get("query_type", QUERY_TYPE_SEARCH))
-
-            symbol = data.get("symbol")
-
-            if symbol is not None:
-                symbol = str(symbol).strip() or None
-
-            # Reject natural-language phrases like "tạo task" or "task creation".
-            if not is_valid_code_symbol(symbol):
-                symbol = None
-
-            # If the LLM forgot an obvious code-like symbol, recover it with regex.
-            if symbol is None:
-                fallback_symbol = extract_symbol_candidate(question)
-
-                if is_valid_code_symbol(fallback_symbol):
-                    symbol = fallback_symbol
-
-            rewritten_query = str(
-                data.get("rewritten_query") or question
-            ).strip()
-
-            confidence = normalize_confidence(data.get("confidence", 0.0))
-            reason = str(data.get("reason") or "").strip()
-
-            return QueryPlan(
-                query_type=query_type,
-                symbol=symbol,
-                rewritten_query=rewritten_query,
-                confidence=confidence,
-                reason=reason,
+            return build_query_plan_from_data(
+                data,
+                question=question,
                 router="llm",
             )
 
@@ -405,3 +520,76 @@ Return the query plan JSON now.
             fallback = rule_based_fallback_route(question)
             fallback.reason = f"{fallback.reason} Router error: {exc}"
             return fallback
+
+    def route_many(self, question: str) -> list[QueryPlan]:
+        """
+        Plan every question as a list of QueryPlan objects.
+
+        This is the main routing method.
+
+        Single-intent question:
+            returns [one_plan]
+
+        Multi-intent question:
+            returns [plan_1, plan_2, ...]
+
+        If planning fails, fallback to the existing single route() wrapped in a list.
+        """
+        user_prompt = f"""
+User question:
+{question}
+
+Return the query plans JSON now.
+"""
+
+        try:
+            raw_output = self.llm.generate(
+                system_prompt=PLANNER_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+            )
+
+            data = extract_json_object(raw_output)
+            raw_plans = data.get("plans", [])
+
+            if not isinstance(raw_plans, list) or not raw_plans:
+                return [self.route(question)]
+
+            plans: list[QueryPlan] = []
+
+            for item in raw_plans[:4]:
+                if not isinstance(item, dict):
+                    continue
+
+                plan = build_query_plan_from_data(
+                    item,
+                    question=question,
+                    router="llm_planner",
+                )
+
+                plans.append(plan)
+
+            if not plans:
+                return [self.route(question)]
+
+            deduped: list[QueryPlan] = []
+            seen = set()
+
+            for plan in plans:
+                key = (
+                    plan.query_type,
+                    plan.symbol or "",
+                    plan.rewritten_query or "",
+                )
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+                deduped.append(plan)
+
+            return deduped
+
+        except Exception as exc:
+            fallback = self.route(question)
+            fallback.reason = f"{fallback.reason} Planner error: {exc}"
+            return [fallback]

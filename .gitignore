@@ -10,6 +10,7 @@ __pycache__/
 
 data/indexes/
 data/repos/
+data/runtime/
 
 .DS_Store
 .ipynb_checkpoints/
