@@ -2,7 +2,7 @@
 
 Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases.
 
-The system can load already-indexed company repositories, temporarily index user-provided public GitHub repositories or ZIP uploads, retrieve relevant code/documentation, build and use a code graph, and answer repository questions using Retrieval-Augmented Generation (RAG), Graph RAG, hybrid retrieval, Cross-Encoder reranking, and an LLM-based query planner.
+The system can load already-indexed company repositories, temporarily index user-provided public GitHub repositories or ZIP uploads, retrieve relevant code/documentation, build and use a code graph, and answer repository questions using Retrieval-Augmented Generation (RAG), Graph RAG, RRF-based multi-source retrieval, Cross-Encoder reranking, and an LLM-based query planner.
 
 Company repositories are indexed and re-indexed through internal scripts, not through the web UI. The web app is user-facing only.
 
@@ -13,6 +13,7 @@ Company repositories are indexed and re-indexed through internal scripts, not th
 - [Features](#features)
 - [Repository lifecycle](#repository-lifecycle)
 - [Architecture](#architecture)
+- [Retrieval pipeline](#retrieval-pipeline)
 - [Query types](#query-types)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
@@ -104,23 +105,26 @@ The project indexes:
 
 ---
 
-### 3. Hybrid retrieval
+### 3. RRF-based multi-source retrieval
 
-Fast mode currently uses a hybrid retrieval strategy:
+Fast mode uses multi-source retrieval with Reciprocal Rank Fusion (RRF).
+
+The retriever builds several ranked result lists:
 
 - Qdrant vector search
-- BM25 lexical scoring
-- Keyword overlap scoring
-- Symbol-aware scoring
-- Documentation boosting for documentation queries
+- Full-repository BM25 search
+- Symbol metadata search
+- Documentation search for documentation queries
 
-This is useful for fast, reasonably accurate codebase search.
+Then it fuses these ranked lists using RRF.
+
+This avoids manually combining scores from different scales and makes retrieval more robust than a simple weighted score formula.
 
 ---
 
 ### 4. Cross-Encoder reranking
 
-Accurate mode adds Cross-Encoder reranking after initial retrieval.
+Accurate mode uses the same RRF retrieval pipeline to retrieve candidate chunks, then applies a Cross-Encoder reranker for final relevance ranking.
 
 This mode is slower than Fast mode, but usually improves relevance for vague or natural-language questions.
 
@@ -280,7 +284,7 @@ When a user switches away from a temporary repository, the app removes the activ
 
 - PostgreSQL
 - Qdrant
-- runtime folders such as `data/runtime/github/` or `data/runtime/uploads/`
+- Runtime folders such as `data/runtime/github/` or `data/runtime/uploads/`
 
 Example:
 
@@ -369,6 +373,10 @@ User clicks Load repository
     ↓
 App loads repo metadata from PostgreSQL
     ↓
+App loads chunk text/metadata from PostgreSQL
+    ↓
+App rebuilds in-memory BM25 index
+    ↓
 App loads code graph from PostgreSQL
     ↓
 App connects to Qdrant by repo_id
@@ -389,10 +397,69 @@ Scan/chunk/embed/build graph
     ↓
 Save temporary metadata and vectors
     ↓
+Build in-memory BM25 index
+    ↓
 Ask questions in current session
     ↓
 Cleanup on switch or expiration
 ```
+
+---
+
+## Retrieval pipeline
+
+The project uses RRF-based retrieval.
+
+### Fast mode
+
+Fast mode runs several retrieval sources independently:
+
+```text
+User query
+    ↓
+Vector search in Qdrant
+Full-repository BM25 search
+Symbol metadata search
+Documentation search for documentation queries
+    ↓
+RRF fusion
+    ↓
+Top results
+```
+
+The final ranking score in Fast mode is the RRF score.
+
+### Accurate mode
+
+Accurate mode uses RRF to retrieve candidates, then reranks those candidates with a Cross-Encoder:
+
+```text
+User query
+    ↓
+Vector search + BM25 search + symbol search + documentation search
+    ↓
+RRF fusion
+    ↓
+Candidate chunks
+    ↓
+Cross-Encoder reranking
+    ↓
+Top results
+```
+
+### Why RRF?
+
+Before RRF, the retriever used a weighted formula over vector score, BM25 score, keyword score, and symbol score.
+
+RRF is better suited here because each retrieval source has different scoring scales. RRF uses rank positions instead of raw score magnitudes.
+
+### Runtime scores
+
+Scores such as BM25 score, RRF score, vector score, and Cross-Encoder score are query-time scores.
+
+They are not stored permanently in the database.
+
+PostgreSQL stores stable chunk text and metadata. Qdrant stores embeddings. Runtime retrieval computes scores for each user query.
 
 ---
 
@@ -422,6 +489,7 @@ Cleanup on switch or expiration
 - SQLAlchemy
 - Sentence Transformers
 - BM25
+- RRF retrieval
 - Cross-Encoder reranking
 - Gemini API
 - Docker Compose
@@ -814,32 +882,24 @@ ZIP upload repositories are temporary and can be cleaned up when switching repos
 
 ### Fast mode
 
-Fast mode currently uses:
+Fast mode uses:
 
 - Qdrant vector search
-- BM25
-- Keyword overlap
-- Symbol-aware scoring
-- Documentation boosting
+- Full-repository BM25 search
+- Symbol metadata search
+- Documentation search for documentation queries
+- RRF fusion
 
 This mode is faster and works well for most questions.
 
 ### Accurate mode
 
-Accurate mode currently uses:
+Accurate mode uses:
 
-- Hybrid retrieval
+- RRF candidate retrieval
 - Cross-Encoder reranking
 
 This mode is slower but usually improves result relevance.
-
-Planned retrieval improvement:
-
-```text
-Vector search + BM25 search + symbol search + documentation search
-→ RRF fusion
-→ optional Cross-Encoder reranking in Accurate mode
-```
 
 ---
 
@@ -1191,8 +1251,9 @@ Implemented:
 - Markdown documentation indexing
 - PostgreSQL metadata storage
 - Qdrant vector storage
-- Fast hybrid retrieval
-- Accurate Cross-Encoder reranking
+- RRF-based multi-source retrieval
+- Fast retrieval mode using RRF
+- Accurate retrieval mode using RRF + Cross-Encoder reranking
 - Graph RAG
 - GitHub temporary repository ingestion
 - ZIP upload temporary repository ingestion
@@ -1209,7 +1270,6 @@ Implemented:
 
 ## Planned improvements
 
-- RRF-based retrieval
 - FastAPI backend
 - Separate frontend
 - Cloud PostgreSQL with Neon
@@ -1219,6 +1279,7 @@ Implemented:
 - Incremental indexing for company repositories
 - Authentication and saved private user repositories
 - Better support for larger repositories
+- Optional MMR diversification for selected query types
 
 ---
 
