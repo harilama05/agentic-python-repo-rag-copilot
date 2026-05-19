@@ -19,6 +19,32 @@ from src.storage.qdrant_vector_store import QdrantCodeVectorStore
 from src.storage.repository_lifecycle import get_repository_snapshot
 
 
+def _count_distinct_chunk_files_by_source_type(
+    chunks: list[dict],
+    source_type: str,
+) -> int:
+    """Count distinct files represented by chunks of a given source type."""
+    paths: set[str] = set()
+
+    for chunk in chunks:
+        metadata = chunk.get("metadata") or {}
+        chunk_source_type = chunk.get("source_type") or metadata.get("source_type")
+
+        if chunk_source_type != source_type:
+            continue
+
+        relative_path = (
+            chunk.get("relative_path")
+            or metadata.get("relative_path")
+            or metadata.get("file_path")
+        )
+
+        if relative_path:
+            paths.add(str(relative_path).replace("\\", "/"))
+
+    return len(paths)
+
+
 def load_existing_codebase_agent(
     repo_id: str,
     retrieval_mode: str,
@@ -56,6 +82,8 @@ def load_existing_codebase_agent(
     metadata_store = MetadataStore()
     code_graph = metadata_store.load_code_graph(repo.repo_id)
     indexed_chunks = metadata_store.load_chunks(repo.repo_id)
+    json_count = _count_distinct_chunk_files_by_source_type(indexed_chunks, "json")
+    text_count = _count_distinct_chunk_files_by_source_type(indexed_chunks, "text")
     vector_store = QdrantCodeVectorStore(repo_id=repo.repo_id)
     retriever = CodeRetriever(
         vector_store=vector_store,
@@ -97,4 +125,6 @@ def load_existing_codebase_agent(
         retriever=retriever,
         tools=tools,
         agent=agent,
+        json_count=json_count,
+        text_count=text_count,
     )

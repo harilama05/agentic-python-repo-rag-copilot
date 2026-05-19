@@ -2,21 +2,23 @@
 
 Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases.
 
-It can load already-indexed company repositories, temporarily index user-provided public GitHub repositories or ZIP uploads, retrieve relevant code and documentation, build and use a Python code graph, and answer repository questions using Retrieval-Augmented Generation (RAG), Graph RAG, RRF-based retrieval, Cross-Encoder reranking, and an LLM query planner.
+The project can load already-indexed company repositories, temporarily index user-provided public GitHub repositories or ZIP uploads, retrieve relevant code/documentation/config/text files, build and use a Python code graph, and answer repository questions using Agentic RAG, Graph RAG, RRF-based retrieval, Cross-Encoder reranking, and an LLM query planner.
 
-The project now includes:
+The current version includes:
 
-- A Streamlit user-facing app
-- A FastAPI backend skeleton
+- Streamlit user-facing app
+- FastAPI backend API
+- Service layer for repository/session/chat workflows
 - PostgreSQL metadata storage
 - Qdrant vector storage
+- Python/Markdown/JSON/TXT indexing
 - RRF multi-source retrieval
 - Cross-Encoder accurate mode
 - Graph RAG for caller/callee/impact queries
+- Logging
+- Extended evaluation metrics
 - Company repository indexing through scripts
-- Temporary GitHub/ZIP repository ingestion
-- Temporary repository cleanup
-- Evaluation scripts
+- Temporary GitHub/ZIP repository ingestion and cleanup
 
 Company repositories are indexed and re-indexed through internal scripts, not through the web UI or public API.
 
@@ -27,8 +29,10 @@ Company repositories are indexed and re-indexed through internal scripts, not th
 - [Current status](#current-status)
 - [Architecture overview](#architecture-overview)
 - [Repository modes](#repository-modes)
+- [Indexed file types](#indexed-file-types)
 - [Retrieval pipeline](#retrieval-pipeline)
 - [Graph RAG](#graph-rag)
+- [FastAPI backend](#fastapi-backend)
 - [API endpoints](#api-endpoints)
 - [Project structure](#project-structure)
 - [Prerequisites](#prerequisites)
@@ -41,9 +45,12 @@ Company repositories are indexed and re-indexed through internal scripts, not th
 - [Run FastAPI backend](#run-fastapi-backend)
 - [Test API endpoints](#test-api-endpoints)
 - [Evaluation](#evaluation)
+- [Logging](#logging)
 - [Useful scripts](#useful-scripts)
 - [Git ignore policy](#git-ignore-policy)
+- [Recommended git workflow](#recommended-git-workflow)
 - [Troubleshooting](#troubleshooting)
+- [Next step](#next-step)
 - [Planned improvements](#planned-improvements)
 - [Deployment direction](#deployment-direction)
 
@@ -54,12 +61,17 @@ Company repositories are indexed and re-indexed through internal scripts, not th
 Implemented:
 
 - User-facing Streamlit app
-- FastAPI backend skeleton
+- FastAPI backend API
 - API route modules for health, company repos, temporary repos, and chat
+- CORS configuration for local frontend development
+- Centralized FastAPI error handling
 - Service layer for repository loading/indexing, sessions, and chat
+- In-memory session store for local/API runtime state
 - Python code indexing
 - Markdown documentation indexing
-- PostgreSQL metadata storage
+- JSON file indexing
+- TXT file indexing
+- PostgreSQL metadata/chunk/graph storage
 - Qdrant vector storage
 - RRF-based multi-source retrieval
 - Fast retrieval mode using RRF
@@ -74,20 +86,35 @@ Implemented:
 - ZIP upload temporary repository ingestion
 - Company repository loading from PostgreSQL + Qdrant
 - Company repository index/re-index script
-- Temporary repository cleanup on switch
+- Temporary repository cleanup on repository switch or explicit cleanup
 - Expired temporary repository cleanup script
 - Code graph persistence and reload from PostgreSQL
 - LLM query planner with multi-intent support
-- Evaluation script
+- Application logging to terminal and `logs/app.log`
+- Extended evaluation metrics:
+  - source precision
+  - citation validity
+  - latency
+  - answer non-empty rate
+  - router fallback rate
+  - LLM failure rate
+
+The backend API is now ready to connect to a separate frontend.
 
 ---
 
 ## Architecture overview
 
-High-level flow:
+High-level Q&A flow:
 
 ```text
 User question
+    ↓
+Frontend / Streamlit / API
+    ↓
+Session Store
+    ↓
+Loaded IndexedCodebase
     ↓
 LLM Query Planner / fallback router
     ↓
@@ -111,23 +138,23 @@ Admin/developer script
     ↓
 Configured company repo
     ↓
-Scan Python files and Markdown docs
+Scan Python, Markdown, JSON, and TXT files
     ↓
-Parse/chunk code and documentation
+Parse/chunk code, docs, config, and text files
     ↓
 Build AST code graph
     ↓
-Store metadata and graph in PostgreSQL
+Store metadata/chunks/graph in PostgreSQL
     ↓
 Store embeddings in Qdrant
     ↓
-Ready for users/API to load and ask questions
+Ready for Streamlit/API users to load and ask questions
 ```
 
 Company repository loading flow:
 
 ```text
-User selects or API loads Company Repo
+User/API loads Company Repo
     ↓
 Load repository metadata from PostgreSQL
     ↓
@@ -137,9 +164,11 @@ Rebuild in-memory BM25 index
     ↓
 Load code graph from PostgreSQL
     ↓
-Connect to Qdrant using repo_id
+Connect to Qdrant by repo_id
     ↓
 Create retriever/tools/agent in memory
+    ↓
+Bind IndexedCodebase to session_id
     ↓
 Answer questions
 ```
@@ -183,7 +212,7 @@ Company repositories are indexed or re-indexed by an admin/developer using:
 python -m scripts.index_company_repo taskflow_api
 ```
 
-The Streamlit UI and FastAPI backend load company repositories. They do not expose public company indexing endpoints.
+The Streamlit UI and FastAPI backend only load company repositories. They do not expose public company indexing endpoints.
 
 ### GitHub URL
 
@@ -223,6 +252,35 @@ ZIP upload includes basic safety checks such as path traversal protection and fi
 
 ---
 
+## Indexed file types
+
+The indexer currently supports:
+
+| File type | Purpose |
+|---|---|
+| `.py` | Python code, functions, classes, methods, graph analysis |
+| `.md`, `.markdown` | README and documentation |
+| `.json` | Config files, sample data, metadata, structured text |
+| `.txt` | Plain text notes, docs, prompts, simple text resources |
+
+UI/API stats expose:
+
+```text
+Python files
+Docs/Text files
+JSON files
+Ignored files
+Total chunks
+```
+
+`Docs/Text files` means:
+
+```text
+Markdown docs + TXT files
+```
+
+---
+
 ## Retrieval pipeline
 
 The project uses RRF-based retrieval.
@@ -237,7 +295,7 @@ User query
 Qdrant vector search
 Full-repository BM25 search
 Symbol metadata search
-Documentation search for documentation queries
+Documentation/text search for documentation queries
     ↓
 RRF fusion
     ↓
@@ -253,7 +311,7 @@ Accurate mode uses RRF to retrieve candidate chunks and then reranks them with a
 ```text
 User query
     ↓
-Vector search + BM25 search + symbol search + documentation search
+Vector search + BM25 search + symbol search + documentation/text search
     ↓
 RRF fusion
     ↓
@@ -314,9 +372,34 @@ Graph results return citation metadata such as:
 
 ---
 
-## API endpoints
+## FastAPI backend
 
-The project now includes a FastAPI skeleton.
+The backend is implemented with FastAPI.
+
+Main responsibilities:
+
+- List indexed company repositories
+- Load company repositories into sessions
+- Index temporary GitHub repositories
+- Index temporary ZIP repositories
+- Answer chat questions against a loaded session
+- Cleanup temporary repositories
+- Return clean API errors
+- Provide CORS support for a future frontend
+
+The backend uses an in-memory session store:
+
+```text
+session_id -> IndexedCodebase
+```
+
+This is enough for local development and demo. If the backend restarts, in-memory sessions are lost. Company repositories can be loaded again from PostgreSQL + Qdrant.
+
+For production, Redis or another external session store would be better.
+
+---
+
+## API endpoints
 
 ### Health
 
@@ -356,7 +439,29 @@ Example body:
 }
 ```
 
-This creates an in-memory session and returns a `session_id`.
+`session_id` is optional. If omitted, the API creates one and returns it.
+
+Example response:
+
+```json
+{
+  "session_id": "generated-session-id",
+  "repo_id": "taskflow_api",
+  "repo_name": "TaskFlow API",
+  "source_type": "company",
+  "is_persistent": true,
+  "local_path": "examples/company_repos/taskflow_api",
+  "collection_name": "taskflow_api",
+  "file_count": 3,
+  "doc_count": 1,
+  "text_count": 1,
+  "docs_text_count": 2,
+  "json_count": 1,
+  "ignored_file_count": 1,
+  "chunk_count": 14,
+  "retrieval_mode": "fast"
+}
+```
 
 ### Index temporary GitHub repository
 
@@ -376,6 +481,8 @@ Example body:
 }
 ```
 
+`session_id` is optional. If omitted, the API creates one and returns it.
+
 ### Index temporary ZIP repository
 
 ```http
@@ -386,6 +493,7 @@ Uses multipart form-data:
 
 ```text
 file: repo.zip
+session_id: optional
 retrieval_mode: fast
 use_llm: true
 use_llm_router: true
@@ -406,10 +514,11 @@ Example body:
 }
 ```
 
-Expected response includes:
+Expected response:
 
 ```json
 {
+  "session_id": "your-session-id",
   "question": "Where is create_task used?",
   "query_type": "reference_query",
   "answer": "...",
@@ -422,10 +531,18 @@ Expected response includes:
 ### Cleanup temporary repository
 
 ```http
-DELETE /temporary-repos/{repo_id}
+DELETE /temporary-repos/{repo_id}?session_id=your-session-id
 ```
 
-Deletes temporary repository metadata, Qdrant points, and runtime files when allowed.
+Response:
+
+```json
+{
+  "repo_id": "zip_code_xxx",
+  "session_id": "your-session-id",
+  "deleted": true
+}
+```
 
 ---
 
@@ -484,6 +601,7 @@ agentic-python-repo-rag-copilot/
 │   ├── graph/
 │   ├── indexing/
 │   ├── ingestion/
+│   ├── observability/
 │   ├── parsing/
 │   ├── reranking/
 │   ├── retrieval/
@@ -544,6 +662,8 @@ DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 QDRANT_COLLECTION=code_chunks
+
+CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
 Do not commit `.env`.
@@ -648,8 +768,8 @@ The same command is used for both first-time indexing and full re-indexing.
 When re-indexing, the script:
 
 1. Deletes old indexed data for the selected repository from PostgreSQL and Qdrant.
-2. Scans the repository source code again.
-3. Rebuilds code and documentation chunks.
+2. Scans Python, Markdown, JSON, and TXT files.
+3. Rebuilds chunks.
 4. Rebuilds the code graph.
 5. Recreates embeddings.
 6. Saves updated metadata, graph data, and vectors.
@@ -702,7 +822,7 @@ Use the sidebar to choose:
 Start the API:
 
 ```powershell
-uvicorn api.main:app --reload
+uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude "logs/*" --reload-exclude "*.log"
 ```
 
 The API runs at:
@@ -744,14 +864,15 @@ Invoke-RestMethod http://127.0.0.1:8000/company-repos
 ### Load company repository
 
 ```powershell
-Invoke-RestMethod `
+$response = Invoke-RestMethod `
   -Method Post `
   -Uri http://127.0.0.1:8000/company-repos/taskflow_api/load `
   -ContentType "application/json" `
   -Body '{"retrieval_mode":"fast","use_llm":true,"use_llm_router":true}'
-```
 
-Copy the returned `session_id`.
+$response
+$sessionId = $response.session_id
+```
 
 ### Chat with loaded repository
 
@@ -760,7 +881,36 @@ Invoke-RestMethod `
   -Method Post `
   -Uri http://127.0.0.1:8000/chat `
   -ContentType "application/json" `
-  -Body '{"session_id":"PASTE_SESSION_ID_HERE","question":"Where is create_task used?"}'
+  -Body (@{
+    session_id = $sessionId
+    question = "Where is create_task used?"
+  } | ConvertTo-Json)
+```
+
+### Test JSON indexing
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/chat `
+  -ContentType "application/json" `
+  -Body (@{
+    session_id = $sessionId
+    question = "Where is json indexing mentioned?"
+  } | ConvertTo-Json)
+```
+
+### Test TXT indexing
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/chat `
+  -ContentType "application/json" `
+  -Body (@{
+    session_id = $sessionId
+    question = "Where is text file indexing mentioned?"
+  } | ConvertTo-Json)
 ```
 
 ### Cleanup temporary repository
@@ -768,7 +918,30 @@ Invoke-RestMethod `
 ```powershell
 Invoke-RestMethod `
   -Method Delete `
-  -Uri http://127.0.0.1:8000/temporary-repos/REPO_ID
+  -Uri "http://127.0.0.1:8000/temporary-repos/REPO_ID?session_id=$sessionId"
+```
+
+### Test clean error response
+
+```powershell
+try {
+  Invoke-RestMethod `
+    -Method Post `
+    -Uri http://127.0.0.1:8000/chat `
+    -ContentType "application/json" `
+    -Body '{"session_id":"fake-session","question":"Where is create_task used?"}'
+} catch {
+  $_.ErrorDetails.Message
+}
+```
+
+Expected shape:
+
+```json
+{
+  "error": "bad_request",
+  "detail": "No repository is loaded for this session. Load a company repository or index a temporary repository first."
+}
 ```
 
 ---
@@ -785,7 +958,12 @@ The evaluation checks:
 
 - Query type routing
 - Source recall
-- Reference query behavior
+- Source precision
+- Citation validity
+- Latency
+- Answer non-empty rate
+- Router fallback rate
+- LLM failure rate
 - Graph caller/callee/impact cases
 - Documentation retrieval
 - Multi-intent planning
@@ -796,7 +974,55 @@ Expected result should be close to or equal to:
 Query type accuracy: 100.00%
 Average source recall: 100.00%
 Expected sources all found rate: 100.00%
+Average citation validity: 100.00%
+Answer non-empty rate: 100.00%
 ```
+
+`Average source precision` may be lower than 100% if the answer returns useful extra sources that are not listed in the expected eval sources.
+
+---
+
+## Logging
+
+Application logs are written to:
+
+```text
+logs/app.log
+```
+
+Logs are also printed to the terminal.
+
+The logger uses rotation, so logs do not grow forever. The intended logging style is operational metadata, not full chat history.
+
+Examples of logged metadata:
+
+```text
+session_id
+repo_id
+source_type
+retrieval_mode
+query_type
+source_count
+tool_count
+error messages
+```
+
+Do not commit logs.
+
+`.gitignore` should include:
+
+```gitignore
+logs/
+*.log
+```
+
+When running FastAPI in development, use:
+
+```powershell
+uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude "logs/*" --reload-exclude "*.log"
+```
+
+This avoids reload noise caused by log file changes.
 
 ---
 
@@ -878,7 +1104,7 @@ python -m scripts.test_llm_router
 
 ## Git ignore policy
 
-Do not commit local runtime data, secrets, virtual environments, cache files, or generated tree files.
+Do not commit local runtime data, secrets, virtual environments, cache files, logs, or generated tree files.
 
 Recommended `.gitignore`:
 
@@ -889,6 +1115,8 @@ __pycache__/
 *.pyc
 data/runtime/
 project_tree.txt
+logs/
+*.log
 postgres_data/
 qdrant_data/
 ```
@@ -908,6 +1136,8 @@ __pycache__/
 *.pyc
 data/runtime/
 project_tree.txt
+logs/
+*.log
 ```
 
 If `.venv` was accidentally staged:
@@ -927,6 +1157,45 @@ If needed:
 ```powershell
 git rm -r --cached .venv
 ```
+
+---
+
+## Recommended git workflow
+
+After backend/API tests pass:
+
+```powershell
+git status
+```
+
+Add only project files, not local runtime or secrets:
+
+```powershell
+git add README.md
+git add api
+git add app
+git add src
+git add scripts
+git add data/eval_cases.json
+git add .gitignore
+git add .env.example
+git add requirements.txt
+git add docker-compose.yml
+```
+
+Commit:
+
+```powershell
+git commit -m "Complete FastAPI backend and extended indexing support"
+```
+
+Push:
+
+```powershell
+git push
+```
+
+If `git status` shows `.venv`, `.env`, `logs`, or `data/runtime`, do not commit yet. Fix `.gitignore` first.
 
 ---
 
@@ -1013,17 +1282,56 @@ Make sure:
 python -m scripts.index_company_repo taskflow_api
 ```
 
+### API reloads repeatedly while logging
+
+Use:
+
+```powershell
+uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude "logs/*" --reload-exclude "*.log"
+```
+
+---
+
+## Next step
+
+The backend/API is now ready for frontend integration.
+
+Recommended frontend stack:
+
+```text
+React + Vite + TypeScript
+```
+
+Frontend flow:
+
+```text
+GET /company-repos
+POST /company-repos/{repo_id}/load
+Store session_id
+POST /chat
+Render answer + sources
+```
+
+After Company Repo + Chat works, add:
+
+```text
+GitHub URL indexing
+ZIP upload indexing
+Temporary repo cleanup
+```
+
 ---
 
 ## Planned improvements
 
-- Full production-ready frontend
+- Production-ready React frontend
 - Deployment to Render/Vercel
 - Neon PostgreSQL
 - Qdrant Cloud
 - Background scheduled cleanup for expired temporary repositories
 - Incremental indexing for company repositories
 - Authentication and saved private user repositories
+- Redis session store for deployed backend
 - Better support for larger repositories
 - Optional MMR diversification for selected query types
 - More automated tests
@@ -1040,6 +1348,7 @@ A production deployment can use:
 - Vercel for frontend
 - Neon for PostgreSQL
 - Qdrant Cloud for vector database
+- Redis or another external store for API sessions
 
 In production:
 
@@ -1047,4 +1356,5 @@ In production:
 - Persistent metadata and vectors should be stored in cloud databases.
 - Company repository indexing can run as an internal script or scheduled job.
 - Temporary repository cleanup should run as a scheduled job.
+- API CORS origins should be restricted to the deployed frontend domain.
 

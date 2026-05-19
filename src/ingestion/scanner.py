@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 from src.core.constants import IGNORE_DIRS, PYTHON_EXTENSIONS
-
+from src.core.constants import JSON_EXTENSIONS, TEXT_EXTENSIONS, IGNORE_DIRS
 
 def should_ignore_path(path: Path) -> bool:
     """Return True if the path should be ignored based on directory names."""
@@ -47,3 +47,42 @@ def scan_python_files(repo_path: str | Path) -> List[Path]:
             python_files.append(path)
 
     return sorted(python_files)
+
+def scan_json_files(repo_path: str | Path) -> list[Path]:
+    """
+    Scan JSON files in a repository.
+    """
+    repo_root = Path(repo_path).resolve()
+    files: list[Path] = []
+
+    for path in repo_root.rglob("*"):
+        if not path.is_file():
+            continue
+
+        if any(part in IGNORE_DIRS for part in path.parts):
+            continue
+
+        if path.suffix.lower() in JSON_EXTENSIONS:
+            files.append(path)
+
+    return sorted(files)
+
+
+def scan_text_files(repo_path: str | Path) -> list[Path]:
+    """
+    Scan TXT files in a repository.
+    """
+    repo_root = Path(repo_path).resolve()
+    files: list[Path] = []
+
+    for path in repo_root.rglob("*"):
+        if not path.is_file():
+            continue
+
+        if any(part in IGNORE_DIRS for part in path.parts):
+            continue
+
+        if path.suffix.lower() in TEXT_EXTENSIONS:
+            files.append(path)
+
+    return sorted(files)

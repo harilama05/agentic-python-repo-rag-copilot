@@ -187,8 +187,11 @@ with st.sidebar:
             st.write(f"Repo ID: {indexed.repo_id}")
             st.write(f"Source type: {indexed.source_type}")
             st.write(f"Persistent: {indexed.is_persistent}")
+            docs_text_count = indexed.doc_count + getattr(indexed, "text_count", 0)
+
             st.write(f"Python files indexed: {indexed.file_count}")
-            st.write(f"Documentation files indexed: {indexed.doc_count}")
+            st.write(f"Docs/Text files indexed: {docs_text_count}")
+            st.write(f"JSON files indexed: {getattr(indexed, 'json_count', 0)}")
             st.write(f"Other files ignored: {indexed.ignored_file_count}")
             st.write(f"Total chunks: {indexed.chunk_count}")
             st.write(f"Collection: {indexed.collection_name}")
@@ -247,8 +250,11 @@ with st.sidebar:
             st.write(f"Repo ID: {indexed.repo_id}")
             st.write(f"Source type: {indexed.source_type}")
             st.write(f"Persistent: {indexed.is_persistent}")
+            docs_text_count = indexed.doc_count + getattr(indexed, "text_count", 0)
+
             st.write(f"Python files indexed: {indexed.file_count}")
-            st.write(f"Documentation files indexed: {indexed.doc_count}")
+            st.write(f"Docs/Text files indexed: {docs_text_count}")
+            st.write(f"JSON files indexed: {getattr(indexed, 'json_count', 0)}")
             st.write(f"Other files ignored: {indexed.ignored_file_count}")
             st.write(f"Total chunks: {indexed.chunk_count}")
             st.write(f"Collection: {indexed.collection_name}")
@@ -280,19 +286,20 @@ if indexed is None:
 
 st.subheader("Indexed Repository")
 
-col1, col2, col3, col4 = st.columns(4)
+docs_text_count = indexed.doc_count + getattr(indexed, "text_count", 0)
 
-with col1:
-    st.metric("Python files", indexed.file_count)
+stats = [
+    ("Python files", indexed.file_count),
+    ("Docs/Text files", docs_text_count),
+    ("JSON files", getattr(indexed, "json_count", 0)),
+    ("Ignored files", indexed.ignored_file_count),
+    ("Total chunks", indexed.chunk_count),
+]
 
-with col2:
-    st.metric("Docs", indexed.doc_count)
+cols = st.columns(len(stats))
 
-with col3:
-    st.metric("Ignored files", indexed.ignored_file_count)
-
-with col4:
-    st.metric("Total chunks", indexed.chunk_count)
+for col, (label, value) in zip(cols, stats):
+    col.metric(label, value)
 
 st.caption(
     f"Repo ID: `{indexed.repo_id}` | "

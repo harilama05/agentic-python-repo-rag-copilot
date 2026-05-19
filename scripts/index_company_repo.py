@@ -127,8 +127,11 @@ def index_company_repo(identifier: str) -> None:
     print(f"Repo name:               {indexed.repo_name}")
     print(f"Source type:             {indexed.source_type}")
     print(f"Persistent:              {indexed.is_persistent}")
+    docs_text_count = indexed.doc_count + getattr(indexed, "text_count", 0)
+
     print(f"Python files indexed:    {indexed.file_count}")
-    print(f"Documentation indexed:   {indexed.doc_count}")
+    print(f"Docs/Text files indexed: {docs_text_count}")
+    print(f"JSON files indexed:      {getattr(indexed, 'json_count', 0)}")
     print(f"Other files ignored:     {indexed.ignored_file_count}")
     print(f"Total chunks:            {indexed.chunk_count}")
     print(f"Collection:              {indexed.collection_name}")

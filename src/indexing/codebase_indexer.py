@@ -12,15 +12,21 @@ from src.agent_core.query_router import LLMQueryRouter
 from src.agent_core.tools import CodebaseTools
 from src.chunking.code_chunker import build_code_chunks
 from src.chunking.markdown_chunker import build_markdown_chunks, scan_markdown_files
+from src.ingestion.scanner import scan_json_files, scan_text_files
+from src.parsing.json_parser import parse_json_file
+from src.parsing.text_parser import parse_text_file
+from src.chunking.text_chunker import build_text_chunks
 from src.core.constants import (
     DOC_EXTENSIONS,
     IGNORE_DIRS,
     INDEX_STATUS_INDEXED,
+    JSON_EXTENSIONS,
     PYTHON_EXTENSIONS,
     REPO_SOURCE_COMPANY,
     REPO_SOURCE_CUSTOM_LOCAL,
     REPO_VISIBILITY_COMPANY,
     REPO_VISIBILITY_PRIVATE_SESSION,
+    TEXT_EXTENSIONS,
 )
 from src.generation.answer_generator import GroundedAnswerGenerator
 from src.generation.llm import GeminiLLM
@@ -65,8 +71,10 @@ def count_ignored_files(repo_path: str | Path) -> int:
         is_python = suffix in PYTHON_EXTENSIONS
         is_readme = name_lower.startswith("readme") and suffix in DOC_EXTENSIONS
         is_docs_markdown = "docs" in parts_lower and suffix in DOC_EXTENSIONS
+        is_json = suffix in JSON_EXTENSIONS
+        is_text = suffix in TEXT_EXTENSIONS
 
-        if not (is_python or is_readme or is_docs_markdown):
+        if not (is_python or is_readme or is_docs_markdown or is_json or is_text):
             ignored_count += 1
 
     return ignored_count
@@ -135,6 +143,8 @@ def build_codebase_agent(
 
     python_files = scan_python_files(repo_path)
     markdown_files = scan_markdown_files(repo_path)
+    json_files = scan_json_files(repo_path)
+    text_files = scan_text_files(repo_path)
     ignored_file_count = count_ignored_files(repo_path)
     all_chunks = []
 
@@ -145,6 +155,16 @@ def build_codebase_agent(
 
     for file_path in markdown_files:
         chunks = build_markdown_chunks(file_path, repo_root=repo_path)
+        all_chunks.extend(chunks)
+
+    for file_path in json_files:
+        parsed_json = parse_json_file(file_path, repo_root=repo_path)
+        chunks = build_text_chunks(parsed_json)
+        all_chunks.extend(chunks)
+
+    for file_path in text_files:
+        parsed_text = parse_text_file(file_path, repo_root=repo_path)
+        chunks = build_text_chunks(parsed_text)
         all_chunks.extend(chunks)
 
     code_graph = build_code_graph(repo_path)
@@ -232,4 +252,6 @@ def build_codebase_agent(
         retriever=retriever,
         tools=tools,
         agent=agent,
+        json_count=len(json_files),
+        text_count=len(text_files),
     )

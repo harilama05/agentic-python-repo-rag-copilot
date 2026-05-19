@@ -29,6 +29,8 @@ class IndexedCodebase:
     retriever: CodeRetriever
     tools: CodebaseTools
     agent: CodebaseAgent
+    json_count: int = 0
+    text_count: int = 0
 
     @property
     def local_path(self) -> str:
