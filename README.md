@@ -2,21 +2,18 @@
 
 Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases.
 
-The system can index Python repositories, retrieve relevant code/documentation, build a code graph, and answer questions using Retrieval-Augmented Generation (RAG), Graph RAG, hybrid retrieval, Cross-Encoder reranking, and an LLM-based query planner.
+The system can load already-indexed company repositories, temporarily index user-provided public GitHub repositories or ZIP uploads, retrieve relevant code/documentation, build and use a code graph, and answer repository questions using Retrieval-Augmented Generation (RAG), Graph RAG, hybrid retrieval, Cross-Encoder reranking, and an LLM-based query planner.
 
-It currently supports these repository sources:
-
-- Company repositories
-- Custom local repositories
-- Public GitHub repositories
-- ZIP upload repositories
+Company repositories are indexed and re-indexed through internal scripts, not through the web UI. The web app is user-facing only.
 
 ---
 
 ## Table of contents
 
 - [Features](#features)
+- [Repository lifecycle](#repository-lifecycle)
 - [Architecture](#architecture)
+- [Query types](#query-types)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
 - [Prerequisites](#prerequisites)
@@ -26,6 +23,7 @@ It currently supports these repository sources:
 - [Environment variables](#environment-variables)
 - [Start PostgreSQL and Qdrant](#start-postgresql-and-qdrant)
 - [Initialize the database](#initialize-the-database)
+- [Index or update company repositories](#index-or-update-company-repositories)
 - [Run the app](#run-the-app)
 - [How to use](#how-to-use)
 - [Example questions](#example-questions)
@@ -35,50 +33,49 @@ It currently supports these repository sources:
 - [Troubleshooting](#troubleshooting)
 - [Current status](#current-status)
 - [Planned improvements](#planned-improvements)
+- [Deployment direction](#deployment-direction)
 
 ---
 
 ## Features
 
-### 1. Multiple repository input modes
+### 1. User-facing repository modes
 
-The app supports four repository sources.
+The web app supports three user-facing repository modes.
 
 #### Company Repo
 
-Preconfigured repositories managed by the project owner/admin.
+Loads an already-indexed persistent company repository from PostgreSQL and Qdrant.
 
-These are treated as persistent repositories.
+Company repositories are indexed or re-indexed by an admin/developer using scripts, for example:
 
-#### Custom Repo
+```powershell
+python -m scripts.index_company_repo taskflow_api
+```
 
-A local repository path on the user's machine.
-
-Useful for local testing and development.
+The web app does not index company repositories directly.
 
 #### GitHub URL
 
-A public GitHub repository URL.
+Temporarily clones and indexes a public GitHub repository.
 
-The app clones the repository into:
+The repository is cloned into:
 
 ```text
 data/runtime/github/
 ```
 
-This runtime folder is created automatically and should not be committed to Git.
+GitHub URL repositories are treated as temporary user-provided data.
 
 #### ZIP Upload
 
-A user can upload a `.zip` file containing a Python repository.
+Temporarily extracts and indexes an uploaded `.zip` file containing a Python repository.
 
-The app extracts the uploaded ZIP into:
+The ZIP is extracted into:
 
 ```text
 data/runtime/uploads/
 ```
-
-Then it indexes the extracted repository like any other repo.
 
 ZIP upload includes basic safety checks:
 
@@ -109,7 +106,7 @@ The project indexes:
 
 ### 3. Hybrid retrieval
 
-Fast mode uses a hybrid retrieval strategy:
+Fast mode currently uses a hybrid retrieval strategy:
 
 - Qdrant vector search
 - BM25 lexical scoring
@@ -146,30 +143,28 @@ Example:
 TaskService.create_task được gọi bởi ai?
 ```
 
-The system uses the code graph instead of relying only on vector search.
+The system can answer this using the code graph instead of relying only on vector search.
 
 ---
 
 ### 6. Persistent metadata storage
 
-The app stores structured repository metadata in PostgreSQL:
+PostgreSQL stores structured repository metadata:
 
 - Repositories
 - Chunks
 - Code graph nodes
 - Code graph edges
 
-This allows the app to persist repo metadata and reconstruct the code graph from the database after restart.
+This allows the app to persist repository metadata and reconstruct the code graph from the database.
 
 ---
 
 ### 7. Vector storage with Qdrant
 
-The app stores code/documentation embeddings in Qdrant.
+Qdrant stores code/documentation embeddings.
 
-A single Qdrant collection can store chunks from multiple repositories.
-
-Each point includes metadata such as:
+A single Qdrant collection can store chunks from multiple repositories. Each vector point includes metadata such as:
 
 - `repo_id`
 - `relative_path`
@@ -226,9 +221,104 @@ If the LLM is unavailable or quota is exhausted, the app can still return fallba
 
 ---
 
+## Repository lifecycle
+
+The project separates persistent company repositories from temporary user repositories.
+
+### Company repositories
+
+Company repositories are persistent.
+
+They are indexed or updated with internal scripts:
+
+```powershell
+python -m scripts.index_company_repo taskflow_api
+```
+
+Company repositories use:
+
+```text
+is_persistent=True
+source_type=company
+```
+
+Flow:
+
+```text
+Admin/developer runs indexing script
+    ↓
+Repository is scanned, chunked, embedded, and saved
+    ↓
+PostgreSQL stores metadata/chunks/code graph
+    ↓
+Qdrant stores vectors
+    ↓
+Web users can load the company repo and ask questions
+```
+
+When company code changes, run the same script again to re-index the selected repository.
+
+This is currently a full re-index of the selected company repository, not incremental file-level indexing.
+
+### Temporary user repositories
+
+User-provided GitHub and ZIP repositories are temporary.
+
+They use:
+
+```text
+is_persistent=False
+source_type=github or zip_upload
+expires_at=<timestamp>
+```
+
+Temporary repositories are cleaned up in two ways.
+
+#### Immediate cleanup
+
+When a user switches away from a temporary repository, the app removes the active temporary repository from:
+
+- PostgreSQL
+- Qdrant
+- runtime folders such as `data/runtime/github/` or `data/runtime/uploads/`
+
+Example:
+
+```text
+ZIP Upload repo A
+    ↓
+User switches to Company Repo
+    ↓
+Repo A is deleted immediately
+```
+
+#### Expired cleanup
+
+If the user closes the tab or the app crashes, immediate cleanup may not run.
+
+Expired temporary repositories can be removed with:
+
+```powershell
+python -m scripts.cleanup_temporary_repos
+```
+
+Preview what would be deleted:
+
+```powershell
+python -m scripts.cleanup_temporary_repos --dry-run
+```
+
+List expired temporary repositories:
+
+```powershell
+python -m scripts.cleanup_temporary_repos --list
+```
+
+---
+
 ## Architecture
 
-High-level flow:
+High-level Q&A flow:
 
 ```text
 User question
@@ -248,10 +338,12 @@ Grounded answer generation
 Answer with sources
 ```
 
-Indexing flow:
+Company repository indexing flow:
 
 ```text
-Repository source
+Admin/developer script
+    ↓
+Configured company repo
     ↓
 Scan Python files and Markdown docs
     ↓
@@ -259,20 +351,47 @@ Chunk code/docs
     ↓
 Build AST code graph
     ↓
-Store metadata in PostgreSQL
+Store metadata and graph in PostgreSQL
     ↓
 Store embeddings in Qdrant
     ↓
-Ready for Q&A
+Ready for web users to load and ask questions
 ```
 
-Repository input flow:
+Company repo loading flow:
 
 ```text
-Company Repo       → local predefined repo
-Custom Repo        → local path
-GitHub URL         → clone into data/runtime/github/
-ZIP Upload         → extract into data/runtime/uploads/
+User selects Company Repo
+    ↓
+App lists persistent repositories from PostgreSQL
+    ↓
+User clicks Load repository
+    ↓
+App loads repo metadata from PostgreSQL
+    ↓
+App loads code graph from PostgreSQL
+    ↓
+App connects to Qdrant by repo_id
+    ↓
+App creates retriever/tools/agent in memory
+    ↓
+User asks questions
+```
+
+Temporary repository flow:
+
+```text
+GitHub URL or ZIP Upload
+    ↓
+Clone/extract into data/runtime/
+    ↓
+Scan/chunk/embed/build graph
+    ↓
+Save temporary metadata and vectors
+    ↓
+Ask questions in current session
+    ↓
+Cleanup on switch or expiration
 ```
 
 ---
@@ -325,19 +444,25 @@ agentic-python-repo-rag-copilot/
 │   ├── sample_python_repo/
 │   └── company_repos/
 ├── scripts/
+│   ├── cleanup_temporary_repos.py
+│   ├── index_company_repo.py
 │   ├── init_db.py
 │   ├── run_eval.py
 │   ├── test_storage_connections.py
 │   ├── test_qdrant_vector_store.py
 │   ├── test_github_ingestion.py
 │   ├── test_zip_ingestion.py
+│   ├── test_load_existing_repo.py
 │   ├── inspect_metadata_records.py
 │   ├── inspect_qdrant_records.py
 │   ├── test_load_code_graph_from_db.py
 │   └── test_multi_intent_router.py
 ├── src/
 │   ├── agent.py
+│   ├── ast_parser.py
+│   ├── chunker.py
 │   ├── code_graph.py
+│   ├── company_repos.py
 │   ├── config.py
 │   ├── constants.py
 │   ├── doc_chunker.py
@@ -349,6 +474,7 @@ agentic-python-repo-rag-copilot/
 │   ├── query_router.py
 │   ├── reranker.py
 │   ├── retriever.py
+│   ├── scanner.py
 │   ├── settings.py
 │   ├── tools.py
 │   ├── db/
@@ -356,6 +482,8 @@ agentic-python-repo-rag-copilot/
 │   │   ├── github_ingestion.py
 │   │   └── zip_ingestion.py
 │   └── storage/
+│       ├── metadata_store.py
+│       └── repository_lifecycle.py
 ├── docker-compose.yml
 ├── requirements.txt
 ├── .env.example
@@ -418,7 +546,6 @@ Download and install Docker Desktop for Windows.
 During Docker Desktop installation, use these options:
 
 - Keep **Use WSL 2 instead of Hyper-V** checked
-- Keep **Add shortcut to desktop** checked if you want
 - Do not enable **Windows Containers** unless you specifically need it
 
 After installation:
@@ -547,8 +674,6 @@ You should see containers for:
 - PostgreSQL
 - Qdrant
 
-If Docker is not running, open Docker Desktop and wait until it is ready.
-
 ---
 
 ## Initialize the database
@@ -575,6 +700,37 @@ Collections: [...]
 
 ---
 
+## Index or update company repositories
+
+Company repositories are not indexed from the web UI.
+
+Use the internal script:
+
+```powershell
+python -m scripts.index_company_repo taskflow_api
+```
+
+List configured company repositories:
+
+```powershell
+python -m scripts.index_company_repo --list
+```
+
+The same command is used for both first-time indexing and updating/re-indexing.
+
+When re-indexing, the script:
+
+1. Deletes old indexed data for the selected repository from PostgreSQL and Qdrant.
+2. Scans the repository source code again.
+3. Rebuilds code and documentation chunks.
+4. Rebuilds the code graph.
+5. Recreates embeddings.
+6. Saves updated metadata, graph data, and vectors.
+
+This is a full re-index of the selected company repository. Incremental file-level indexing is not implemented yet.
+
+---
+
 ## Run the app
 
 Start Streamlit:
@@ -589,59 +745,35 @@ Then open the Streamlit URL shown in the terminal.
 
 ## How to use
 
-### Company Repo mode
+### Company Repo
 
-Use this mode for predefined repositories inside the project.
+Use this mode for already-indexed company repositories.
 
 Steps:
 
-1. Select `Company Repo`
-2. Choose a repository
+1. Select `Company Repo`.
+2. Choose an indexed company repository.
 3. Select retrieval mode:
    - Fast
    - Accurate
-4. Click `Index repository`
-5. Ask questions
+4. Click `Load repository`.
+5. Ask questions.
 
-Example:
-
-```text
-TaskService.create_task được gọi bởi ai?
-```
+This mode does not index the repository again. It loads metadata and code graph data from PostgreSQL and uses Qdrant for vector retrieval.
 
 ---
 
-### Custom Repo mode
-
-Use this mode for a local path on your machine.
-
-Steps:
-
-1. Select `Custom Repo`
-2. Enter a local repository path
-3. Click `Index repository`
-4. Ask questions
-
----
-
-### GitHub URL mode
+### GitHub URL
 
 Use this mode for public GitHub repositories.
 
 Steps:
 
-1. Select `GitHub URL`
-2. Enter a public GitHub repository URL
-
-Example:
-
-```text
-https://github.com/owner/repo
-```
-
-3. Optionally enter a branch name
-4. Click `Index repository`
-5. Ask questions
+1. Select `GitHub URL`.
+2. Enter a public GitHub repository URL.
+3. Optionally enter a branch name.
+4. Click `Index temporary repository`.
+5. Ask questions.
 
 The repository is cloned into:
 
@@ -651,18 +783,20 @@ data/runtime/github/
 
 This folder is created automatically and is ignored by Git.
 
+GitHub URL repositories are temporary and can be cleaned up when switching repos or when expired.
+
 ---
 
-### ZIP Upload mode
+### ZIP Upload
 
 Use this mode for uploaded repository ZIP files.
 
 Steps:
 
-1. Select `ZIP Upload`
-2. Upload a `.zip` file containing a Python repository
-3. Click `Index repository`
-4. Ask questions
+1. Select `ZIP Upload`.
+2. Upload a `.zip` file containing a Python repository.
+3. Click `Index temporary repository`.
+4. Ask questions.
 
 The ZIP is extracted into:
 
@@ -672,13 +806,15 @@ data/runtime/uploads/
 
 This folder is created automatically and is ignored by Git.
 
+ZIP upload repositories are temporary and can be cleaned up when switching repos or when expired.
+
 ---
 
 ## Retrieval modes
 
 ### Fast mode
 
-Fast mode uses:
+Fast mode currently uses:
 
 - Qdrant vector search
 - BM25
@@ -690,12 +826,20 @@ This mode is faster and works well for most questions.
 
 ### Accurate mode
 
-Accurate mode uses:
+Accurate mode currently uses:
 
 - Hybrid retrieval
 - Cross-Encoder reranking
 
 This mode is slower but usually improves result relevance.
+
+Planned retrieval improvement:
+
+```text
+Vector search + BM25 search + symbol search + documentation search
+→ RRF fusion
+→ optional Cross-Encoder reranking in Accurate mode
+```
 
 ---
 
@@ -820,6 +964,42 @@ python -m scripts.init_db
 python -m scripts.test_storage_connections
 ```
 
+### Index or update a company repository
+
+```powershell
+python -m scripts.index_company_repo taskflow_api
+```
+
+### List configured company repositories
+
+```powershell
+python -m scripts.index_company_repo --list
+```
+
+### Cleanup expired temporary repositories
+
+```powershell
+python -m scripts.cleanup_temporary_repos
+```
+
+### Dry-run temporary cleanup
+
+```powershell
+python -m scripts.cleanup_temporary_repos --dry-run
+```
+
+### List expired temporary repositories
+
+```powershell
+python -m scripts.cleanup_temporary_repos --list
+```
+
+### Test loading an existing indexed repo
+
+```powershell
+python -m scripts.test_load_existing_repo
+```
+
 ### Test Qdrant vector store
 
 ```powershell
@@ -914,15 +1094,7 @@ docker ps
 docker compose up -d
 ```
 
----
-
 ### PostgreSQL or Qdrant connection refused
-
-Error example:
-
-```text
-No connection could be made because the target machine actively refused it
-```
 
 Fix:
 
@@ -933,13 +1105,11 @@ python -m scripts.test_storage_connections
 
 Also check that `.env` uses the correct PostgreSQL port.
 
----
-
 ### Port conflict with local PostgreSQL
 
 If you already have PostgreSQL installed on your machine, port `5432` may be busy.
 
-In that case, map Docker PostgreSQL to another host port, for example:
+Map Docker PostgreSQL to another host port, for example:
 
 ```yaml
 ports:
@@ -952,8 +1122,6 @@ Then update `.env`:
 DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
 ```
 
----
-
 ### Docker Desktop WSL2 issue
 
 If Docker says it cannot connect to `dockerDesktopLinuxEngine`, try:
@@ -964,8 +1132,6 @@ wsl --shutdown
 
 Then reopen Docker Desktop.
 
----
-
 ### Qdrant client/server version warning
 
 You may see a warning if the Qdrant Python client version and server version are not close enough.
@@ -974,15 +1140,21 @@ Usually this is a warning, not always a fatal error.
 
 If it causes issues, align the Qdrant Docker image version and Python package version.
 
----
-
 ### Gemini API quota or key issue
 
 If Gemini quota is exhausted or the API key is invalid, final LLM answer generation may fail.
 
 The app can still return tool-based fallback answers if retrieval and graph tools work.
 
----
+### No indexed company repositories found
+
+Run the company repository indexing script first:
+
+```powershell
+python -m scripts.index_company_repo taskflow_api
+```
+
+Then restart or refresh the app and select `Company Repo`.
 
 ### ZIP upload cannot be indexed
 
@@ -1014,6 +1186,7 @@ If these folders do not exist after cloning the project, that is normal.
 
 Implemented:
 
+- User-facing Streamlit app
 - Python code indexing
 - Markdown documentation indexing
 - PostgreSQL metadata storage
@@ -1021,29 +1194,30 @@ Implemented:
 - Fast hybrid retrieval
 - Accurate Cross-Encoder reranking
 - Graph RAG
-- GitHub public repository ingestion
-- ZIP upload repository ingestion
+- GitHub temporary repository ingestion
+- ZIP upload temporary repository ingestion
+- Company repository loading from PostgreSQL + Qdrant
+- Company repository index/re-index script
+- Temporary repository cleanup on switch
+- Expired temporary repository cleanup script
 - Code graph persistence and reload from PostgreSQL
 - LLM query planner
 - Multi-intent query execution
-- Streamlit UI
 - Evaluation script
 
 ---
 
 ## Planned improvements
 
-- Improve Streamlit UI/UX
-- Add repository/session management
-- Add admin repository management
-- Add FastAPI backend
-- Add separate frontend
-- Deploy backend to Render
-- Deploy frontend to Vercel
-- Move PostgreSQL to Neon
-- Move Qdrant to Qdrant Cloud
-- Add background indexing jobs
-- Add authentication
+- RRF-based retrieval
+- FastAPI backend
+- Separate frontend
+- Cloud PostgreSQL with Neon
+- Qdrant Cloud
+- Deployment on Render/Vercel
+- Background scheduled cleanup for expired temporary repositories
+- Incremental indexing for company repositories
+- Authentication and saved private user repositories
 - Better support for larger repositories
 
 ---
@@ -1059,10 +1233,7 @@ A production deployment can use:
 - Neon for PostgreSQL
 - Qdrant Cloud for vector database
 
-In production, temporary repository cloning and ZIP extraction should happen on the backend server, while persistent metadata and vectors should be stored in cloud databases.
+In production, temporary repository cloning and ZIP extraction should happen on the backend server. Persistent metadata and vectors should be stored in cloud databases.
 
----
+Company repository indexing can run as an internal script or scheduled job that writes to the same PostgreSQL and Qdrant instances used by the web app.
 
-## License
-
-This project is intended for educational and portfolio use.
