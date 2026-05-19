@@ -11,7 +11,7 @@ from src.db.models import (
     CodeNode as DBCodeNode,
     Repository,
 )
-from src.code_graph import CodeGraph, CodeNode as GraphCodeNode
+from src.graph.code_graph import CodeGraph, CodeNode as GraphCodeNode
 from src.db.session import get_db_session
 
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.qdrant_vector_store import QdrantCodeVectorStore
+from src.storage.qdrant_vector_store import QdrantCodeVectorStore
 
 
 @dataclass

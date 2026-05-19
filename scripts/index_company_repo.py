@@ -2,10 +2,10 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.company_repos import get_company_repo, get_company_repo_options
-from src.constants import REPO_SOURCE_COMPANY
-from src.indexer import build_codebase_agent
-from src.settings import RETRIEVAL_MODE_FAST
+from src.services.company_repos import get_company_repo, get_company_repo_options
+from src.core.constants import REPO_SOURCE_COMPANY
+from src.indexing.codebase_indexer import build_codebase_agent
+from src.core.settings import RETRIEVAL_MODE_FAST
 from src.storage.repository_lifecycle import delete_repository
 
 

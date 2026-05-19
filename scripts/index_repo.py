@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.indexer import build_codebase_agent
+from src.indexing.codebase_indexer import build_codebase_agent
 
 
 def main() -> None:

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
-from src.settings import QDRANT_COLLECTION
+from src.core.settings import QDRANT_COLLECTION
 
 
 def main() -> None:

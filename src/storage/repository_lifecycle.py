@@ -8,11 +8,11 @@ from datetime import datetime, timezone
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
 
-from src.config import RUNTIME_DIR
-from src.constants import TEMPORARY_REPO_SOURCE_TYPES
+from src.core.config import RUNTIME_DIR
+from src.core.constants import TEMPORARY_REPO_SOURCE_TYPES
 from src.db.models import Chunk, CodeEdge, CodeNode, Repository
 from src.db.session import get_db_session
-from src.settings import QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL
+from src.core.settings import QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL
 import os
 import stat
 import time

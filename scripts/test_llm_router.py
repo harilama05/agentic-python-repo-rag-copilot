@@ -1,5 +1,5 @@
-from src.llm import GeminiLLM
-from src.query_router import LLMQueryRouter
+from src.agent_core.query_router import LLMQueryRouter
+from src.generation.llm import GeminiLLM
 
 
 def main():

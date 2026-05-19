@@ -1,22 +1,29 @@
+"""Evaluation runner for repository QA behavior."""
+
 from collections import defaultdict
 from pathlib import Path
+import sys
 
-from src.evaluator import (
+from src.evaluation.eval_runner import (
     evaluate_response,
     load_eval_cases,
     summarize_eval_results,
 )
-from src.indexer import build_codebase_agent
+from src.indexing.codebase_indexer import build_codebase_agent
+from src.core.settings import RETRIEVAL_MODE_FAST
 
-from src.settings import RETRIEVAL_MODE_FAST
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 def resolve_repo_path(repo_path: str) -> Path:
+    """Resolve repository paths used by eval cases."""
     path = Path(repo_path)
 
     if path.exists():
         return path
 
-    # Fallback for older local setup if sample repo still lives in data/repos.
     if repo_path == "examples/sample_python_repo":
         fallback = Path("data/repos/sample_python_repo")
         if fallback.exists():
@@ -26,6 +33,7 @@ def resolve_repo_path(repo_path: str) -> Path:
 
 
 def build_indexed_repos(cases):
+    """Index each repository referenced by eval cases once."""
     cases_by_repo = defaultdict(list)
 
     for case in cases:
@@ -47,7 +55,7 @@ def build_indexed_repos(cases):
             use_llm=False,
             retrieval_mode=RETRIEVAL_MODE_FAST,
             use_llm_router=True,
-            save_metadata=False
+            save_metadata=False,
         )
 
         print(f"Python files:        {indexed.file_count}")
@@ -61,6 +69,7 @@ def build_indexed_repos(cases):
 
 
 def print_result(result):
+    """Print one evaluation result in a human-readable format."""
     status = (
         "PASS"
         if result.query_type_correct and result.expected_sources_all_found
@@ -92,6 +101,7 @@ def print_result(result):
 
 
 def print_summary(title, results):
+    """Print aggregate evaluation metrics."""
     summary = summarize_eval_results(results)
 
     print("\n" + "=" * 100)
@@ -104,18 +114,17 @@ def print_summary(title, results):
 
 
 def main() -> None:
+    """Run the repository QA evaluation suite."""
     eval_path = Path("data/eval_cases.json")
 
     cases = load_eval_cases(eval_path)
     print(f"Loaded {len(cases)} eval cases")
 
     indexed_repos = build_indexed_repos(cases)
-
     results = []
 
     for case in cases:
         indexed = indexed_repos[case.repo_id]
-
         response = indexed.agent.answer(case.question)
         result = evaluate_response(case, response)
 

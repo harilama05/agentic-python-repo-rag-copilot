@@ -1,0 +1,100 @@
+"""Repository loading workflow for already indexed repositories.
+
+This module reconstructs runtime objects from PostgreSQL metadata and Qdrant
+vectors without re-scanning or re-indexing repository files.
+"""
+
+from pathlib import Path
+
+from src.agent_core.agent import CodebaseAgent
+from src.agent_core.query_router import LLMQueryRouter
+from src.agent_core.tools import CodebaseTools
+from src.core.constants import REPO_SOURCE_COMPANY
+from src.generation.answer_generator import GroundedAnswerGenerator
+from src.indexing.codebase_indexer import build_optional_llm
+from src.indexing.models import IndexedCodebase
+from src.retrieval.retriever import CodeRetriever
+from src.storage.metadata_store import MetadataStore
+from src.storage.qdrant_vector_store import QdrantCodeVectorStore
+from src.storage.repository_lifecycle import get_repository_snapshot
+
+
+def load_existing_codebase_agent(
+    repo_id: str,
+    retrieval_mode: str,
+    use_llm: bool,
+    use_llm_router: bool = True,
+) -> IndexedCodebase:
+    """Load an already indexed persistent repository from PostgreSQL and Qdrant."""
+    repo = get_repository_snapshot(repo_id)
+
+    if repo is None:
+        raise ValueError(f"Repository not found in database: {repo_id}")
+
+    if not repo.is_persistent:
+        raise ValueError(
+            f"Repository {repo_id} is not persistent. "
+            "Only persistent/company repositories can be loaded this way."
+        )
+
+    if not repo.local_path:
+        raise ValueError(
+            f"Repository {repo_id} does not have a local_path stored."
+        )
+
+    repo_path = Path(repo.local_path).resolve()
+
+    if not repo_path.exists():
+        raise ValueError(
+            f"Repository local_path does not exist: {repo_path}. "
+            "Re-index this repository or restore the source folder."
+        )
+
+    collection_name = getattr(repo, "collection_name", None) or repo.repo_id
+    repo_name = getattr(repo, "repo_name", None) or repo.repo_id
+    source_type = getattr(repo, "source_type", None) or REPO_SOURCE_COMPANY
+    metadata_store = MetadataStore()
+    code_graph = metadata_store.load_code_graph(repo.repo_id)
+    indexed_chunks = metadata_store.load_chunks(repo.repo_id)
+    vector_store = QdrantCodeVectorStore(repo_id=repo.repo_id)
+    retriever = CodeRetriever(
+        vector_store=vector_store,
+        indexed_chunks=indexed_chunks,
+    )
+    tools = CodebaseTools(
+        retriever=retriever,
+        repo_root=repo_path,
+        retrieval_mode=retrieval_mode,
+        code_graph=code_graph,
+    )
+
+    shared_llm = build_optional_llm(use_llm or use_llm_router)
+    router_llm = shared_llm if use_llm_router else None
+    answer_llm = shared_llm if use_llm else None
+    query_router = LLMQueryRouter(llm=router_llm)
+    answer_generator = GroundedAnswerGenerator(answer_llm) if answer_llm is not None else None
+    agent = CodebaseAgent(
+        tools=tools,
+        query_router=query_router,
+        llm=answer_llm,
+        use_llm=use_llm,
+        answer_generator=answer_generator,
+    )
+
+    return IndexedCodebase(
+        repo_id=repo.repo_id,
+        repo_name=repo_name,
+        source_type=source_type,
+        is_persistent=repo.is_persistent,
+        repo_path=repo_path,
+        collection_name=collection_name,
+        file_count=getattr(repo, "file_count", 0) or 0,
+        doc_count=getattr(repo, "doc_count", 0) or 0,
+        ignored_file_count=getattr(repo, "ignored_file_count", 0) or 0,
+        chunk_count=getattr(repo, "chunk_count", 0) or 0,
+        code_graph=code_graph,
+        vector_store=vector_store,
+        retriever=retriever,
+        tools=tools,
+        agent=agent,
+    )

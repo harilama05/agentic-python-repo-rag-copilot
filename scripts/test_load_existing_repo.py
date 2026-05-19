@@ -1,8 +1,17 @@
-from src.indexer import load_existing_codebase_agent
-from src.settings import RETRIEVAL_MODE_FAST
+"""Manual smoke test for loading an already indexed repository."""
+
+import sys
+
+from src.indexing.codebase_loader import load_existing_codebase_agent
+from src.core.settings import RETRIEVAL_MODE_FAST
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def main() -> None:
+    """Load one existing repository and ask a documentation-style question."""
     repo_id = input("Repo ID to load: ").strip()
 
     indexed = load_existing_codebase_agent(

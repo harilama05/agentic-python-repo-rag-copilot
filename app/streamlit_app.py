@@ -1,17 +1,23 @@
+"""Streamlit user-facing application entrypoint.
+
+This UI stays focused on presentation and delegates repository loading,
+temporary indexing, and question answering to the service layer.
+"""
+
 import streamlit as st
 
-from src.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
-from src.constants import (
-    REPO_SOURCE_GITHUB,
-    REPO_SOURCE_ZIP_UPLOAD,
+from src.core.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
+from src.services.chat_service import answer_question
+from src.services.repository_service import (
+    cleanup_temporary_repo,
+    index_github_repo,
+    index_zip_repo,
+    list_company_repos,
+    load_company_repo,
 )
-from src.ingestion.zip_ingestion import ingest_zip_bytes
-from src.ingestion.github_ingestion import clone_github_repo
-from src.indexer import build_codebase_agent, load_existing_codebase_agent
-from src.storage.repository_lifecycle import (
-    cleanup_temporary_repository,
-    list_persistent_repositories,
-)
+
+
+STREAMLIT_SESSION_ID = "streamlit_ui"
 
 
 def cleanup_active_temporary_repo() -> None:
@@ -20,7 +26,10 @@ def cleanup_active_temporary_repo() -> None:
     if not active_temp_repo_id:
         return
 
-    deleted = cleanup_temporary_repository(active_temp_repo_id)
+    deleted = cleanup_temporary_repo(
+        active_temp_repo_id,
+        session_id=STREAMLIT_SESSION_ID,
+    )
 
     if deleted:
         st.session_state.active_temp_repo_id = None
@@ -73,7 +82,7 @@ with st.sidebar:
     selected_existing_repo_id = None
 
     if repo_mode == "Company Repo":
-        persistent_repos = list_persistent_repositories()
+        persistent_repos = list_company_repos()
 
         if not persistent_repos:
             st.warning(
@@ -162,8 +171,9 @@ with st.sidebar:
             cleanup_active_temporary_repo()
 
             with st.spinner("Loading indexed repository from database..."):
-                indexed = load_existing_codebase_agent(
+                indexed = load_company_repo(
                     repo_id=selected_existing_repo_id,
+                    session_id=STREAMLIT_SESSION_ID,
                     retrieval_mode=retrieval_mode,
                     use_llm=use_llm,
                     use_llm_router=use_llm_router,
@@ -189,10 +199,6 @@ with st.sidebar:
 
     if index_button:
         try:
-            github_url_for_metadata = None
-            branch_for_metadata = None
-            commit_hash_for_metadata = None
-
             if repo_mode == "GitHub URL":
                 if not github_url.strip():
                     st.error("Please enter a GitHub repository URL.")
@@ -200,23 +206,16 @@ with st.sidebar:
 
                 cleanup_active_temporary_repo()
 
-                with st.spinner("Cloning GitHub repository..."):
-                    ingested_repo = clone_github_repo(
+                with st.spinner("Cloning and indexing GitHub repository..."):
+                    indexed = index_github_repo(
                         github_url=github_url,
+                        session_id=STREAMLIT_SESSION_ID,
                         branch=github_branch.strip() or None,
+                        retrieval_mode=retrieval_mode,
+                        use_llm=use_llm,
+                        use_llm_router=use_llm_router,
+                        reset_collection=reset_collection,
                     )
-
-                repo_path = str(ingested_repo.local_path)
-                collection_name = ingested_repo.repo_id
-
-                repo_id = ingested_repo.repo_id
-                repo_name = ingested_repo.name
-                source_type = REPO_SOURCE_GITHUB
-                is_persistent = False
-
-                github_url_for_metadata = ingested_repo.github_url
-                branch_for_metadata = ingested_repo.branch
-                commit_hash_for_metadata = ingested_repo.commit_hash
 
             elif repo_mode == "ZIP Upload":
                 if uploaded_zip is None:
@@ -225,50 +224,24 @@ with st.sidebar:
 
                 cleanup_active_temporary_repo()
 
-                with st.spinner("Extracting ZIP repository..."):
-                    ingested_repo = ingest_zip_bytes(
+                with st.spinner("Extracting and indexing ZIP repository..."):
+                    indexed = index_zip_repo(
                         filename=uploaded_zip.name,
                         zip_bytes=uploaded_zip.getvalue(),
+                        session_id=STREAMLIT_SESSION_ID,
+                        retrieval_mode=retrieval_mode,
+                        use_llm=use_llm,
+                        use_llm_router=use_llm_router,
+                        reset_collection=reset_collection,
                     )
-
-                repo_path = str(ingested_repo.local_path)
-                collection_name = ingested_repo.repo_id
-
-                repo_id = ingested_repo.repo_id
-                repo_name = ingested_repo.name
-                source_type = REPO_SOURCE_ZIP_UPLOAD
-                is_persistent = False
 
             else:
                 st.error("This mode does not support temporary indexing.")
                 st.stop()
 
-            with st.spinner("Indexing temporary repository..."):
-                indexed = build_codebase_agent(
-                    repo_path=repo_path,
-                    collection_name=collection_name,
-                    reset_collection=reset_collection,
-                    use_llm=use_llm,
-                    retrieval_mode=retrieval_mode,
-                    use_llm_router=use_llm_router,
-                    repo_id=repo_id,
-                    repo_name=repo_name,
-                    source_type=source_type,
-                    is_persistent=is_persistent,
-                    local_path=repo_path,
-                    github_url=github_url_for_metadata,
-                    branch=branch_for_metadata,
-                    commit_hash=commit_hash_for_metadata,
-                    save_metadata=True,
-                )
-
             st.session_state.indexed_codebase = indexed
             st.session_state.chat_history = []
-
-            if indexed.source_type in {REPO_SOURCE_GITHUB, REPO_SOURCE_ZIP_UPLOAD}:
-                st.session_state.active_temp_repo_id = indexed.repo_id
-            else:
-                st.session_state.active_temp_repo_id = None
+            st.session_state.active_temp_repo_id = indexed.repo_id
 
             st.success("Temporary repository indexed successfully!")
             st.write(f"Repo ID: {indexed.repo_id}")
@@ -342,7 +315,10 @@ ask_button = st.button("Ask", type="primary")
 
 if ask_button and question.strip():
     with st.spinner("Agent is working..."):
-        response = indexed.agent.answer(question.strip())
+        response = answer_question(
+            session_id=STREAMLIT_SESSION_ID,
+            question=question.strip(),
+        )
 
     st.session_state.chat_history.append(response)
 

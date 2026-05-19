@@ -1,0 +1,41 @@
+"""Core runtime settings loaded from environment variables."""
+
+import os
+
+from dotenv import load_dotenv
+
+
+DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+DEFAULT_TOP_K = 5
+DEFAULT_CANDIDATE_K = 20
+
+VECTOR_WEIGHT = 0.40
+BM25_WEIGHT = 0.30
+SYMBOL_WEIGHT = 0.20
+KEYWORD_WEIGHT = 0.10
+
+RRF_K = 60
+RRF_VECTOR_CANDIDATE_K = 50
+RRF_BM25_CANDIDATE_K = 50
+RRF_SYMBOL_CANDIDATE_K = 30
+RRF_DOCUMENTATION_CANDIDATE_K = 30
+RRF_FINAL_CANDIDATE_K = 30
+
+DOCUMENTATION_TOP_K = 5
+FALLBACK_SEARCH_TOP_K = 3
+
+DEFAULT_RETRIEVAL_MODE = "fast"
+RETRIEVAL_MODE_FAST = "fast"
+RETRIEVAL_MODE_ACCURATE = "accurate"
+CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+CROSS_ENCODER_CANDIDATE_K = 20
+
+MAX_REPO_UPLOAD_MB = 100
+MAX_GITHUB_REPO_MB = 100
+
+load_dotenv(override=True)
+
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "code_chunks")

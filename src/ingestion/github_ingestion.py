@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import os
 import stat
 import time
-from src.config import RUNTIME_GITHUB_DIR
+from src.core.config import RUNTIME_GITHUB_DIR
 
 
 @dataclass

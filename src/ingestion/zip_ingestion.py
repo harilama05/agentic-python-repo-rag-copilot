@@ -5,7 +5,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.config import RUNTIME_UPLOADS_DIR
+from src.core.config import RUNTIME_UPLOADS_DIR
 
 
 MAX_ZIP_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
