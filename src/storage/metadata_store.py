@@ -4,7 +4,6 @@ from typing import Any, Iterable
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
 
 from src.db.models import (
     Chunk,
@@ -79,8 +78,7 @@ class MetadataStore:
     - code graph nodes
     - code graph edges
 
-    Embeddings are still stored in Chroma for now.
-    Qdrant will be added in the next phase.
+    Embeddings are stored in Qdrant.
     """
 
     def upsert_repository(
@@ -255,6 +253,66 @@ class MetadataStore:
 
             session.add_all(chunk_rows)
 
+    def load_chunks(self, repo_id: str) -> list[dict[str, Any]]:
+        """
+        Load chunks from PostgreSQL for runtime retrieval.
+
+        This is used when loading an already-indexed company repository.
+        Embeddings remain in Qdrant; this method loads chunk text/metadata for
+        BM25, symbol search, documentation search, and source display.
+        """
+        with get_db_session() as session:
+            rows = session.execute(
+                select(Chunk)
+                .where(Chunk.repo_id == repo_id)
+                .order_by(Chunk.relative_path, Chunk.start_line, Chunk.chunk_id)
+            ).scalars().all()
+
+            chunks: list[dict[str, Any]] = []
+
+            for row in rows:
+                metadata = {
+                    "chunk_id": row.chunk_id,
+                    "repo_id": row.repo_id,
+                    "source_type": row.source_type,
+                    "relative_path": row.relative_path,
+                    "file_path": row.relative_path,
+                    "start_line": row.start_line,
+                    "end_line": row.end_line,
+                    "line_start": row.start_line,
+                    "line_end": row.end_line,
+                    "symbol_name": row.symbol_name,
+                    "qualified_name": row.qualified_name,
+                    "symbol": row.qualified_name or row.symbol_name,
+                    "symbol_type": row.symbol_type,
+                    "heading": row.heading,
+                }
+
+                chunks.append(
+                    {
+                        "chunk_id": row.chunk_id,
+                        "repo_id": row.repo_id,
+                        "source_type": row.source_type,
+                        "relative_path": row.relative_path,
+                        "file_path": row.relative_path,
+                        "start_line": row.start_line,
+                        "end_line": row.end_line,
+                        "line_start": row.start_line,
+                        "line_end": row.end_line,
+                        "symbol_name": row.symbol_name,
+                        "qualified_name": row.qualified_name,
+                        "symbol": row.qualified_name or row.symbol_name,
+                        "symbol_type": row.symbol_type,
+                        "heading": row.heading,
+                        "text": row.text,
+                        "content": row.text,
+                        "code": row.text,
+                        "metadata": metadata,
+                    }
+                )
+
+            return chunks
+
     def replace_code_graph(
         self,
         *,
@@ -390,7 +448,7 @@ class MetadataStore:
             ).scalars().all()
 
             return len(result)
-    
+
     def load_code_graph(self, repo_id: str) -> CodeGraph:
         """
         Reconstruct CodeGraph from PostgreSQL code_nodes/code_edges.

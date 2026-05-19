@@ -4,14 +4,12 @@ from src.qdrant_vector_store import QdrantCodeVectorStore
 from src.agent import CodebaseAgent
 from src.ast_parser import parse_python_file
 from src.chunker import build_code_chunks
-from src.config import INDEX_DIR
 from src.doc_chunker import build_markdown_chunks, scan_markdown_files
 from src.llm import GeminiLLM
 from src.retriever import CodeRetriever
 from src.scanner import scan_python_files
 from src.settings import RETRIEVAL_MODE_FAST
 from src.tools import CodebaseTools
-# from src.vector_store import CodeVectorStore
 from src.query_router import LLMQueryRouter
 from src.code_graph import CodeGraph, build_code_graph
 from datetime import datetime, timedelta, timezone
@@ -26,6 +24,8 @@ from src.constants import (
     REPO_VISIBILITY_COMPANY,
     REPO_VISIBILITY_PRIVATE_SESSION,
 )
+from src.storage.repository_lifecycle import get_repository_snapshot
+
 
 @dataclass
 class IndexedCodebase:
@@ -45,19 +45,23 @@ class IndexedCodebase:
     tools: CodebaseTools
     agent: CodebaseAgent
 
+    @property
+    def local_path(self) -> str:
+        return str(self.repo_path)
+
 
 def make_collection_name(repo_path: str | Path) -> str:
     """
-    Create a safe Chroma collection name from repo folder name.
+    Create a safe collection name from repo folder name.
     """
     repo_path = Path(repo_path).resolve()
     name = repo_path.name.lower().replace(" ", "_").replace("-", "_")
 
-    # Chroma collection names should be simple and at least 3 chars.
     if len(name) < 3:
         name = f"repo_{name}"
 
     return name
+
 
 def count_ignored_files(repo_path: str | Path) -> int:
     """
@@ -92,6 +96,7 @@ def count_ignored_files(repo_path: str | Path) -> int:
             ignored_count += 1
 
     return ignored_count
+
 
 def build_codebase_agent(
     repo_path: str | Path,
@@ -148,7 +153,7 @@ def build_codebase_agent(
     python_files = scan_python_files(repo_path)
     markdown_files = scan_markdown_files(repo_path)
     ignored_file_count = count_ignored_files(repo_path)
-    
+
     all_chunks = []
 
     for file_path in python_files:
@@ -160,7 +165,6 @@ def build_codebase_agent(
         chunks = build_markdown_chunks(file_path, repo_root=repo_path)
         all_chunks.extend(chunks)
 
-    # Build the code graph
     code_graph = build_code_graph(repo_path)
 
     vector_store = QdrantCodeVectorStore(
@@ -206,17 +210,20 @@ def build_codebase_agent(
             code_graph=code_graph,
         )
 
-        # Product-style behavior:
-        # after persisting graph, use the graph reconstructed from PostgreSQL.
         code_graph = metadata_store.load_code_graph(repo_id)
 
-    retriever = CodeRetriever(vector_store)
+    retriever = CodeRetriever(
+        vector_store=vector_store,
+        indexed_chunks=all_chunks,
+    )
+
     tools = CodebaseTools(
         retriever=retriever,
         repo_root=repo_path,
         retrieval_mode=retrieval_mode,
         code_graph=code_graph,
     )
+
     llm = GeminiLLM() if (use_llm or use_llm_router) else None
     if llm is None:
         raise ValueError("LLM Query Router requires GeminiLLM, but llm is None.")
@@ -240,6 +247,100 @@ def build_codebase_agent(
         doc_count=len(markdown_files),
         ignored_file_count=ignored_file_count,
         chunk_count=len(all_chunks),
+        code_graph=code_graph,
+        vector_store=vector_store,
+        retriever=retriever,
+        tools=tools,
+        agent=agent,
+    )
+
+
+def load_existing_codebase_agent(
+    repo_id: str,
+    retrieval_mode: str,
+    use_llm: bool,
+    use_llm_router: bool = True,
+) -> IndexedCodebase:
+    """
+    Load an already-indexed persistent repository from PostgreSQL + Qdrant.
+
+    This function does NOT scan files, chunk code, build embeddings, or upsert
+    vectors. It only recreates runtime objects needed for Q&A.
+    """
+    repo = get_repository_snapshot(repo_id)
+
+    if repo is None:
+        raise ValueError(f"Repository not found in database: {repo_id}")
+
+    if not repo.is_persistent:
+        raise ValueError(
+            f"Repository {repo_id} is not persistent. "
+            "Only persistent/company repositories can be loaded this way."
+        )
+
+    if not repo.local_path:
+        raise ValueError(
+            f"Repository {repo_id} does not have a local_path stored."
+        )
+
+    repo_path = Path(repo.local_path).resolve()
+
+    if not repo_path.exists():
+        raise ValueError(
+            f"Repository local_path does not exist: {repo_path}. "
+            "Re-index this repository or restore the source folder."
+        )
+
+    collection_name = getattr(repo, "collection_name", None) or repo.repo_id
+    repo_name = getattr(repo, "repo_name", None) or repo.repo_id
+    source_type = getattr(repo, "source_type", None) or REPO_SOURCE_COMPANY
+
+    metadata_store = MetadataStore()
+
+    code_graph = metadata_store.load_code_graph(repo.repo_id)
+    indexed_chunks = metadata_store.load_chunks(repo.repo_id)
+
+    vector_store = QdrantCodeVectorStore(
+        repo_id=repo.repo_id,
+    )
+
+    retriever = CodeRetriever(
+        vector_store=vector_store,
+        indexed_chunks=indexed_chunks,
+    )
+
+    tools = CodebaseTools(
+        retriever=retriever,
+        repo_root=repo_path,
+        retrieval_mode=retrieval_mode,
+        code_graph=code_graph,
+    )
+
+    llm = GeminiLLM() if (use_llm or use_llm_router) else None
+
+    if llm is None:
+        raise ValueError("LLM Query Router requires GeminiLLM, but llm is None.")
+
+    query_router = LLMQueryRouter(llm=llm)
+
+    agent = CodebaseAgent(
+        tools=tools,
+        query_router=query_router,
+        llm=llm,
+        use_llm=use_llm,
+    )
+
+    return IndexedCodebase(
+        repo_id=repo.repo_id,
+        repo_name=repo_name,
+        source_type=source_type,
+        is_persistent=repo.is_persistent,
+        repo_path=repo_path,
+        collection_name=collection_name,
+        file_count=getattr(repo, "file_count", 0) or 0,
+        doc_count=getattr(repo, "doc_count", 0) or 0,
+        ignored_file_count=getattr(repo, "ignored_file_count", 0) or 0,
+        chunk_count=getattr(repo, "chunk_count", 0) or 0,
         code_graph=code_graph,
         vector_store=vector_store,
         retriever=retriever,
