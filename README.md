@@ -1,8 +1,9 @@
 # 🐍 Agentic RAG Codebase Assistant
 
-Trợ lý AI thông minh cho các dự án Python, sử dụng kỹ thuật **Agentic RAG** (Retrieval-Augmented Generation) hiện đại.
+Trợ lý AI cho codebase Python: quét mã, trích xuất symbol bằng AST, index bằng embeddings,
+và trả lời câu hỏi về mã nguồn thông qua pipeline RAG (retrieval + LLM).
 
-Hệ thống quét mã nguồn Python, trích xuất hàm/lớp/phương thức bằng AST, đánh chỉ mục vào cơ sở dữ liệu vector, và trả lời câu hỏi về codebase thông qua các công cụ agent: tìm kiếm ngữ nghĩa, tra cứu symbol, truy vết tham chiếu, và đọc file.
+Tài liệu này tập trung hướng dẫn cài đặt, cấu hình và cách chạy (local, Docker, cloud).
 
 ---
 
@@ -224,31 +225,67 @@ agentic-python-codebase-rag/
 
 ---
 
-## Cài đặt
+**Yêu cầu trước khi chạy**
+- Python 3.11+
+- Git
+- (Nếu dùng Docker) Docker Desktop hoặc Docker Engine
 
-```bash
-# Clone repo
-git clone https://github.com/your-username/agentic-python-codebase-rag.git
-cd agentic-python-codebase-rag
+**1) Chạy nhanh trên máy (local, dành cho testing)**
 
-# Tạo môi trường ảo
+1. Tạo môi trường và cài dependencies:
+
+```powershell
+cd "D:\Tự học\AI\RAG\Chính thức\agentic-python-repo-rag-copilot"
 python -m venv .venv
-
-# Kích hoạt (Windows PowerShell)
 .\.venv\Scripts\Activate.ps1
-
-# Cài đặt dependencies
 pip install -r requirements.txt
 ```
 
-Cấu hình (tùy chọn):
-```bash
-# Sao chép file cấu hình mẫu
-cp .env.example .env
+2. Cấu hình biến môi trường: sao chép mẫu và chỉnh `OPENAI_API_KEY`
 
-# Thêm API key nếu muốn dùng LLM sinh câu trả lời
-# OPENAI_API_KEY=sk-...
+```powershell
+copy .env.example .env
+# Mở .env và đặt API key/endpoint (nếu dùng Google Gemini tương tự):
+# OPENAI_API_KEY=YOUR_API_KEY
+# OPENAI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 ```
+
+3. Chạy Streamlit (UI):
+
+```powershell
+python -m streamlit run app/streamlit_app.py
+```
+
+Mở: http://localhost:8501
+
+4. (Tùy chọn) Chạy API riêng:
+
+```powershell
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+**2) Chạy bằng Docker Compose (recommended để chạy giống production)**
+
+1. Mở Docker Desktop (hoặc đảm bảo Docker daemon đang chạy).
+2. Từ thư mục gốc repo, build và chạy:
+
+```powershell
+cd docker
+docker-compose up --build
+```
+
+Các service mặc định:
+- Streamlit UI: http://localhost:8501
+- API (profile `api`): http://localhost:8000 (khi chạy với `--profile api`)
+
+Lưu ý lỗi phổ biến:
+- `unable to get image 'docker-streamlit': request returned 500` → khởi động lại Docker Desktop hoặc chạy `docker-compose build` để xem logs chi tiết.
+
+**3) Triển khai lên cloud nhanh (Render / Railway / Streamlit Cloud)**
+
+- Push repo lên GitHub.
+- Tạo service Docker trên Render/Railway: chọn repo → Docker deploy → set env variables (`OPENAI_API_KEY`, `OPENAI_API_BASE_URL`).
+- Hoặc deploy Streamlit app lên Streamlit Cloud (chỉ UI). Nếu cần, tôi có thể tạo file `render.yaml` hoặc hướng dẫn chi tiết.
 
 ---
 
@@ -256,28 +293,29 @@ cp .env.example .env
 
 ### Streamlit UI (khuyên dùng)
 
-```bash
+```powershell
 python -m streamlit run app/streamlit_app.py
 ```
 
-Mở trình duyệt tại `http://localhost:8501`
-
 ### REST API
 
-```bash
+```powershell
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-API docs tại `http://localhost:8000/docs`
+API docs: http://localhost:8000/docs
 
-### Command Line
+### CLI hữu ích
 
-```bash
+```powershell
 # Tạo repo mẫu để test
 python -m scripts.seed_sample_repo
 
-# Index một repository
+# Index một repository (local)
 python -m scripts.index_repo --repo data/repos/sample_python_repo
+
+# Rebuild index từ đầu
+python -m scripts.rebuild_index --repo data/repos/sample_python_repo
 
 # Chạy đánh giá
 python -m scripts.run_eval --repo data/repos/sample_python_repo
@@ -286,27 +324,18 @@ python -m scripts.run_eval --repo data/repos/sample_python_repo
 ---
 
 ## Ví dụ sử dụng
+## Ví dụ sử dụng
 
-### Câu hỏi: "Hàm create_user được sử dụng ở đâu?"
+### Ví dụ 1 — Tìm nơi định nghĩa `create_user`
 
-```
-Loại truy vấn: reference_query
-Công cụ: find_references("create_user")
+Trên UI > Chat, gõ: "Where is create_user defined?". Hệ thống dùng `find_references("create_user")` và trả về các nguồn kèm location ví dụ:
 
-Kết quả:
-- service.py:12 (định nghĩa) — def create_user(name, email)
-- main.py:5   (tham chiếu)  — user = create_user("Alice", "alice@example.com")
-```
+- `service.py:12` — `def create_user(name, email)` (định nghĩa)
+- `main.py:5` — tham chiếu nơi hàm được gọi
 
-### Câu hỏi: "Lớp UserService làm gì?"
+### Ví dụ 2 — Giải thích `UserService`
 
-```
-Loại truy vấn: explanation_query
-Công cụ: find_symbol("UserService") → search_code("UserService")
-
-Kết quả: Hiển thị mã nguồn và docstring của lớp UserService
-với trích dẫn file:dòng chính xác.
-```
+Gõ: "What does UserService do?" → hệ thống sẽ trả về docstring + các đoạn code liên quan, kèm citation `[file:start-end]`.
 
 ---
 
@@ -326,12 +355,13 @@ với trích dẫn file:dòng chính xác.
 ---
 
 ## Hạn chế hiện tại
+## Hạn chế hiện tại
 
 - Chỉ hỗ trợ codebase Python
 - Agent workflow dựa trên luật (chưa dùng LLM để chọn tool)
 - Tìm kiếm tham chiếu dùng regex (chưa dùng AST-based call graph)
-- Không chỉnh sửa code, không tạo pull request
-- Repo lớn có thể mất thời gian index trên CPU
+- Không chỉnh sửa code hoặc tạo pull request tự động
+- Repo lớn có thể mất nhiều thời gian để index trên CPU
 
 ---
 
