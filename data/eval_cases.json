@@ -17,8 +17,7 @@
     "expected_query_type": "reference_query",
     "expected_sources": [
       "app/main.py:1",
-      "app/main.py:5",
-      "app/services/user_service.py:1"
+      "app/main.py:5"
     ]
   },
   {
@@ -50,8 +49,7 @@
     "expected_query_type": "reference_query",
     "expected_sources": [
       "app/main.py:1",
-      "app/main.py:5",
-      "app/services/user_service.py:1"
+      "app/main.py:5"
     ]
   },
   {
@@ -122,9 +120,7 @@
     "question": "Where is create_task used?",
     "expected_query_type": "reference_query",
     "expected_sources": [
-      "app/api/tasks.py:9",
-      "app/api/tasks.py:11",
-      "app/services/task_service.py:11"
+      "app/api/tasks.py:11"
     ]
   },
   {

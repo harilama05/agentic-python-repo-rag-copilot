@@ -38,6 +38,7 @@ class QueryPlan:
     confidence: float
     reason: str
     router: str = "llm"
+    router_error: Optional[str] = None
 
 
 STOPWORDS = {
@@ -335,6 +336,10 @@ def build_query_plan_from_data(
     confidence = normalize_confidence(data.get("confidence", 0.0))
     reason = str(data.get("reason") or "").strip()
 
+    router_error = data.get("router_error")
+    if router_error is not None:
+        router_error = str(router_error)
+
     return QueryPlan(
         query_type=query_type,
         symbol=symbol,
@@ -342,6 +347,7 @@ def build_query_plan_from_data(
         confidence=confidence,
         reason=reason,
         router=router,
+        router_error=router_error,
     )
 
 
@@ -486,7 +492,7 @@ class LLMQueryRouter:
     route() is kept as a compatibility/fallback single-plan router.
     """
 
-    def __init__(self, llm: GeminiLLM):
+    def __init__(self, llm: Optional[GeminiLLM] = None):
         self.llm = llm
 
     def route(self, question: str) -> QueryPlan:
@@ -495,6 +501,11 @@ class LLMQueryRouter:
 
         The main agent pipeline should call route_many().
         """
+        if self.llm is None:
+            fallback = rule_based_fallback_route(question)
+            fallback.router_error = "LLM router is unavailable; using fallback rules."
+            return fallback
+
         user_prompt = f"""
 User question:
 {question}
@@ -519,6 +530,7 @@ Return the query plan JSON now.
         except Exception as exc:
             fallback = rule_based_fallback_route(question)
             fallback.reason = f"{fallback.reason} Router error: {exc}"
+            fallback.router_error = str(exc)
             return fallback
 
     def route_many(self, question: str) -> list[QueryPlan]:
@@ -535,6 +547,11 @@ Return the query plan JSON now.
 
         If planning fails, fallback to the existing single route() wrapped in a list.
         """
+        if self.llm is None:
+            fallback = rule_based_fallback_route(question)
+            fallback.router_error = "LLM planner is unavailable; using fallback rules."
+            return [fallback]
+
         user_prompt = f"""
 User question:
 {question}

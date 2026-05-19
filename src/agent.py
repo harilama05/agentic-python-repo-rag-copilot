@@ -41,6 +41,70 @@ class CodebaseAgent:
         self.llm = llm
         self.use_llm = use_llm
 
+    def _query_plan_to_dict(self, query_plan: QueryPlan | Dict[str, Any] | None) -> Dict[str, Any]:
+        if query_plan is None:
+            return {}
+
+        if isinstance(query_plan, dict):
+            return dict(query_plan)
+
+        return asdict(query_plan)
+
+    def _attach_plan_metadata(
+        self,
+        response: AgentResponse,
+        query_plan: QueryPlan,
+    ) -> AgentResponse:
+        plan_dict = self._query_plan_to_dict(query_plan)
+
+        response.raw_results["query_plan"] = plan_dict
+        response.raw_results["router"] = plan_dict.get("router")
+        response.raw_results["router_error"] = plan_dict.get("router_error")
+
+        if not self.use_llm or self.llm is None:
+            response.raw_results.setdefault("llm_enabled", False)
+            response.raw_results.setdefault("llm_skipped", True)
+
+        return response
+
+    def _build_ambiguous_graph_response(
+        self,
+        *,
+        question: str,
+        query_type: str,
+        symbol: str,
+        tools_used: List[str],
+        graph_result: Dict[str, Any],
+    ) -> AgentResponse:
+        candidates = graph_result.get("candidates", [])
+
+        lines = [
+            f"I found multiple symbols matching `{symbol}`.",
+            "Please use a more specific qualified name, such as one of these:",
+        ]
+
+        for candidate in candidates:
+            candidate_symbol = candidate.get("symbol") or candidate.get("qualified_name")
+            relative_path = candidate.get("relative_path")
+            line_start = candidate.get("line_start")
+            line_end = candidate.get("line_end")
+
+            lines.append(
+                f"- `{candidate_symbol}` in `{relative_path}:{line_start}-{line_end}`"
+            )
+
+        return AgentResponse(
+            question=question,
+            query_type=query_type,
+            answer="\n".join(lines),
+            tools_used=tools_used,
+            sources=candidates,
+            raw_results={
+                "graph_result": graph_result,
+                "ambiguous": True,
+            },
+        )
+
     def answer(self, question: str) -> AgentResponse:
         query_plans = self.query_router.route_many(question)
 
@@ -108,7 +172,7 @@ class CodebaseAgent:
             response = self._answer_search_query(effective_question)
             response.question = question
 
-        response.raw_results["query_plan"] = asdict(query_plan)
+        self._attach_plan_metadata(response, query_plan)
 
         if symbol_resolution is not None:
             response.raw_results["symbol_resolution"] = symbol_resolution
@@ -130,6 +194,7 @@ class CodebaseAgent:
                 source.get("symbol"),
                 source.get("type"),
                 source.get("role"),
+                source.get("source_role"),
             )
 
             if key in seen:
@@ -172,7 +237,7 @@ class CodebaseAgent:
 
             raw_sub_responses.append(
                 {
-                    "query_plan": asdict(plan),
+                    "query_plan": self._query_plan_to_dict(plan),
                     "query_type": sub_response.query_type,
                     "tools_used": sub_response.tools_used,
                     "sources": sub_response.sources,
@@ -209,15 +274,26 @@ class CodebaseAgent:
             fallback_answer = "\n".join(fallback_lines)
             query_type = QUERY_TYPE_MULTI_INTENT
 
+        plan_dicts = [self._query_plan_to_dict(plan) for plan in query_plans]
+
         raw_results = {
-            "query_plans": [asdict(plan) for plan in query_plans],
+            "query_plans": plan_dicts,
+            "plans": plan_dicts,
+            "routers": [plan.get("router") for plan in plan_dicts],
+            "router_errors": [
+                plan.get("router_error")
+                for plan in plan_dicts
+                if plan.get("router_error")
+            ],
             "sub_responses": raw_sub_responses,
             "source_excerpts": source_excerpts,
             "plan_count": len(query_plans),
         }
 
         if len(query_plans) == 1:
-            raw_results["query_plan"] = asdict(query_plans[0])
+            raw_results["query_plan"] = plan_dicts[0]
+            raw_results["router"] = plan_dicts[0].get("router")
+            raw_results["router_error"] = plan_dicts[0].get("router_error")
 
         return AgentResponse(
             question=question,
@@ -234,6 +310,8 @@ class CodebaseAgent:
         when LLM generation is enabled.
         """
         if not self.use_llm or self.llm is None:
+            response.raw_results["llm_enabled"] = False
+            response.raw_results["llm_skipped"] = True
             return response
 
         try:
@@ -265,37 +343,70 @@ class CodebaseAgent:
             return response
 
     def _answer_reference_query(self, question: str, symbol: str) -> AgentResponse:
-        tools_used = [f'find_references("{symbol}")']
-        references = self.tools.find_references(symbol)
+        tools_used = [f'find_references("{symbol}", include_definition=False)']
+        references = self.tools.find_references(
+            symbol_name=symbol,
+            include_definition=False,
+        )
+
+        definitions = self.tools.find_definitions(symbol) if hasattr(self.tools, "find_definitions") else []
 
         if not references:
-            answer = f"I could not find any references to `{symbol}` in the indexed codebase."
+            answer_lines = [
+                f"I could not find any usage/reference of `{symbol}` in the indexed codebase."
+            ]
+
+            if definitions:
+                answer_lines.append("")
+                answer_lines.append("I found its definition, but it is not counted as a usage:")
+                for definition in definitions:
+                    answer_lines.append(
+                        f"- `{definition.get('relative_path')}:{definition.get('line_start')}-{definition.get('line_end')}` "
+                        f"— `{definition.get('symbol')}`"
+                    )
+
             return AgentResponse(
                 question=question,
                 query_type=QUERY_TYPE_REFERENCE,
-                answer=answer,
+                answer="\n".join(answer_lines),
                 tools_used=tools_used,
                 sources=[],
-                raw_results={"references": references},
+                raw_results={
+                    "references": references,
+                    "definitions": definitions,
+                },
             )
 
-        lines = [f"I found `{symbol}` in these locations:"]
+        lines = [f"I found `{symbol}` used/referenced in these locations:"]
 
         sources = []
 
         for ref in references:
-            line_type = "definition" if ref["is_definition"] else "reference"
-            lines.append(
-                f"- `{ref['relative_path']}:{ref['line_number']}` "
-                f"({line_type}) — `{ref['line'].strip()}`"
-            )
+            relative_path = ref.get("relative_path", "")
+            line_start = ref.get("line_start") or ref.get("line_number")
+            line_end = ref.get("line_end") or line_start
+            line = str(ref.get("line") or "").strip()
+            reference_type = ref.get("reference_type") or ref.get("source_role") or "reference"
+
+            if line:
+                lines.append(
+                    f"- `{relative_path}:{line_start}` "
+                    f"({reference_type}) — `{line}`"
+                )
+            else:
+                lines.append(
+                    f"- `{relative_path}:{line_start}` "
+                    f"({reference_type})"
+                )
 
             sources.append(
                 {
-                    "relative_path": ref["relative_path"],
-                    "line_start": ref["line_number"],
-                    "line_end": ref["line_number"],
-                    "type": line_type,
+                    "relative_path": relative_path,
+                    "line_start": line_start,
+                    "line_end": line_end,
+                    "symbol": ref.get("symbol") or symbol,
+                    "type": reference_type,
+                    "source_role": reference_type,
                 }
             )
 
@@ -305,7 +416,10 @@ class CodebaseAgent:
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
-            raw_results={"references": references},
+            raw_results={
+                "references": references,
+                "definitions": definitions,
+            },
         )
 
     def _answer_location_query(self, question: str, symbol: str) -> AgentResponse:
@@ -342,6 +456,8 @@ class CodebaseAgent:
                         "line_start": result["start_line"],
                         "line_end": result["end_line"],
                         "symbol": result["qualified_name"],
+                        "type": result.get("symbol_type") or result.get("source_type"),
+                        "source_role": "definition",
                     }
                 )
 
@@ -372,6 +488,8 @@ class CodebaseAgent:
                     "line_start": result["start_line"],
                     "line_end": result["end_line"],
                     "symbol": result["qualified_name"],
+                    "type": result.get("symbol_type") or result.get("source_type"),
+                    "source_role": "definition",
                 }
             )
 
@@ -418,6 +536,8 @@ class CodebaseAgent:
                 "line_start": first["start_line"],
                 "line_end": first["end_line"],
                 "symbol": first["qualified_name"],
+                "type": first.get("symbol_type") or first.get("source_type"),
+                "source_role": "definition",
             }
         ]
 
@@ -630,8 +750,18 @@ class CodebaseAgent:
         tools_used = [f'find_callers("{symbol}")']
         graph_result = self.tools.find_callers(symbol)
 
-        targets = graph_result["targets"]
-        callers = graph_result["callers"]
+        if graph_result.get("ambiguous"):
+            return self._build_ambiguous_graph_response(
+                question=question,
+                query_type=QUERY_TYPE_CALLER,
+                symbol=symbol,
+                tools_used=tools_used,
+                graph_result=graph_result,
+            )
+
+        resolved_symbol = graph_result.get("resolved_symbol") or symbol
+        targets = graph_result.get("targets", [])
+        callers = graph_result.get("callers", [])
 
         if not targets:
             answer = f"I could not find `{symbol}` in the code graph."
@@ -645,7 +775,7 @@ class CodebaseAgent:
             )
 
         if not callers:
-            answer = f"I found `{symbol}`, but could not find any callers in the code graph."
+            answer = f"I found `{resolved_symbol}`, but could not find any callers in the code graph."
             sources = targets
             source_excerpts = self._build_source_excerpts(sources)
 
@@ -661,7 +791,7 @@ class CodebaseAgent:
                 },
             )
 
-        lines = [f"`{symbol}` is called by:"]
+        lines = [f"`{resolved_symbol}` is called by:"]
 
         for caller in callers:
             lines.append(
@@ -683,13 +813,23 @@ class CodebaseAgent:
                 "source_excerpts": source_excerpts,
             },
         )
-    
+
     def _answer_callee_query(self, question: str, symbol: str) -> AgentResponse:
         tools_used = [f'find_callees("{symbol}")']
         graph_result = self.tools.find_callees(symbol)
 
-        sources_nodes = graph_result["sources"]
-        callees = graph_result["callees"]
+        if graph_result.get("ambiguous"):
+            return self._build_ambiguous_graph_response(
+                question=question,
+                query_type=QUERY_TYPE_CALLEE,
+                symbol=symbol,
+                tools_used=tools_used,
+                graph_result=graph_result,
+            )
+
+        resolved_symbol = graph_result.get("resolved_symbol") or symbol
+        sources_nodes = graph_result.get("sources", [])
+        callees = graph_result.get("callees", [])
 
         if not sources_nodes:
             answer = f"I could not find `{symbol}` in the code graph."
@@ -703,7 +843,7 @@ class CodebaseAgent:
             )
 
         if not callees:
-            answer = f"I found `{symbol}`, but it does not call any indexed functions or methods."
+            answer = f"I found `{resolved_symbol}`, but it does not call any indexed functions or methods."
             sources = sources_nodes
 
             return AgentResponse(
@@ -717,7 +857,7 @@ class CodebaseAgent:
                 },
             )
 
-        lines = [f"`{symbol}` calls:"]
+        lines = [f"`{resolved_symbol}` calls:"]
 
         for callee in callees:
             lines.append(
@@ -739,12 +879,23 @@ class CodebaseAgent:
                 "source_excerpts": source_excerpts,
             },
         )
+
     def _answer_impact_query(self, question: str, symbol: str) -> AgentResponse:
         tools_used = [f'impact_analysis("{symbol}")']
         graph_result = self.tools.impact_analysis(symbol)
 
-        targets = graph_result["targets"]
-        affected = graph_result["affected"]
+        if graph_result.get("ambiguous"):
+            return self._build_ambiguous_graph_response(
+                question=question,
+                query_type=QUERY_TYPE_IMPACT,
+                symbol=symbol,
+                tools_used=tools_used,
+                graph_result=graph_result,
+            )
+
+        resolved_symbol = graph_result.get("resolved_symbol") or symbol
+        targets = graph_result.get("targets", [])
+        affected = graph_result.get("affected", [])
 
         if not targets:
             answer = f"I could not find `{symbol}` in the code graph."
@@ -759,7 +910,7 @@ class CodebaseAgent:
 
         if not affected:
             answer = (
-                f"I found `{symbol}`, but the code graph did not find any callers "
+                f"I found `{resolved_symbol}`, but the code graph did not find any callers "
                 "that would be directly affected."
             )
             sources = targets
@@ -778,7 +929,7 @@ class CodebaseAgent:
             )
 
         lines = [
-            f"If `{symbol}` is changed or removed, these code locations may be affected:"
+            f"If `{resolved_symbol}` is changed or removed, these code locations may be affected:"
         ]
 
         for node in affected:
@@ -801,7 +952,7 @@ class CodebaseAgent:
                 "source_excerpts": source_excerpts,
             },
         )
-    
+
     def _build_source_excerpts(
         self,
         sources: List[Dict[str, Any]],
@@ -843,7 +994,7 @@ class CodebaseAgent:
                         "line_start": file_content["start_line"],
                         "line_end": file_content["end_line"],
                         "symbol": source.get("symbol"),
-                        "role": source.get("role") or source.get("type"),
+                        "role": source.get("source_role") or source.get("role") or source.get("type"),
                         "content": file_content["content"],
                     }
                 )
@@ -855,7 +1006,7 @@ class CodebaseAgent:
                         "line_start": line_start,
                         "line_end": line_end,
                         "symbol": source.get("symbol"),
-                        "role": source.get("role") or source.get("type"),
+                        "role": source.get("source_role") or source.get("role") or source.get("type"),
                         "error": str(exc),
                     }
                 )

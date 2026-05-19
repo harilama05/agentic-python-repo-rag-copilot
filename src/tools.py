@@ -39,16 +39,55 @@ def format_search_result(result: CodeSearchResult) -> Dict[str, Any]:
         "text": result.text,
     }
 
-def format_graph_node(node: CodeNode, node_role: str = "node") -> Dict[str, Any]:
-    return {
-        "node_id": node.node_id,
-        "role": node_role,
-        "relative_path": node.relative_path,
-        "line_start": node.start_line,
-        "line_end": node.end_line,
-        "symbol": node.qualified_name,
-        "type": node.node_type,
+
+def normalize_source(
+    *,
+    relative_path: str,
+    line_start: int | None,
+    line_end: int | None,
+    symbol: str | None = None,
+    source_type: str | None = None,
+    source_role: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """
+    Normalize source metadata for UI/API citations.
+
+    The rest of the app should use line_start/line_end consistently.
+    """
+    source: Dict[str, Any] = {
+        "relative_path": str(relative_path or "").replace("\\", "/"),
+        "line_start": line_start,
+        "line_end": line_end,
+        "symbol": symbol,
+        "type": source_type,
     }
+
+    if source_role:
+        source["source_role"] = source_role
+        source["role"] = source_role
+
+    if extra:
+        source.update(extra)
+
+    return source
+
+
+def format_graph_node(node: CodeNode, node_role: str = "node") -> Dict[str, Any]:
+    return normalize_source(
+        relative_path=node.relative_path,
+        line_start=node.start_line,
+        line_end=node.end_line,
+        symbol=node.qualified_name,
+        source_type=node.node_type,
+        source_role=node_role,
+        extra={
+            "node_id": node.node_id,
+            "name": node.name,
+            "qualified_name": node.qualified_name,
+            "parent": getattr(node, "parent", None),
+        },
+    )
 
 class CodebaseTools:
     def __init__(
@@ -67,6 +106,70 @@ class CodebaseTools:
             self.reranker = CrossEncoderReranker()
         else:
             self.reranker = NoOpReranker()
+
+    def resolve_graph_symbols(
+        self,
+        symbol_name: str,
+        max_candidates: int = 10,
+    ) -> List[CodeNode]:
+        """
+        Resolve a user-provided symbol into graph nodes.
+
+        Priority:
+        1. Exact qualified_name match
+        2. Exact short name match
+        3. Suffix qualified_name match, e.g. ".create_task"
+
+        If multiple nodes match, callers/callees/impact should return an
+        ambiguity response instead of guessing.
+        """
+        query = symbol_name.strip()
+        query_lower = query.lower()
+
+        exact_qualified: List[CodeNode] = []
+        exact_name: List[CodeNode] = []
+        suffix_match: List[CodeNode] = []
+
+        for node in self.code_graph.nodes.values():
+            qualified_name = str(node.qualified_name or "")
+            name = str(node.name or "")
+
+            qualified_lower = qualified_name.lower()
+            name_lower = name.lower()
+
+            if qualified_lower == query_lower:
+                exact_qualified.append(node)
+            elif name_lower == query_lower:
+                exact_name.append(node)
+            elif qualified_lower.endswith(f".{query_lower}"):
+                suffix_match.append(node)
+
+        if exact_qualified:
+            return exact_qualified[:max_candidates]
+
+        if exact_name:
+            return exact_name[:max_candidates]
+
+        return suffix_match[:max_candidates]
+
+    def _build_ambiguous_symbol_response(
+        self,
+        symbol_name: str,
+        candidates: List[CodeNode],
+    ) -> Dict[str, Any]:
+        return {
+            "symbol": symbol_name,
+            "resolved_symbol": None,
+            "ambiguous": True,
+            "message": (
+                f"Multiple symbols match '{symbol_name}'. "
+                "Use a more qualified name to disambiguate."
+            ),
+            "candidates": [
+                format_graph_node(candidate, node_role="candidate")
+                for candidate in candidates
+            ],
+        }
 
     def search_code(
         self,
@@ -138,6 +241,29 @@ class CodebaseTools:
 
         return formatted_results
 
+    def find_definitions(self, symbol_name: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        Find symbol definitions only.
+        """
+        results = self.find_symbol(symbol_name=symbol_name, top_k=top_k)
+
+        definitions = []
+
+        for result in results:
+            definitions.append(
+                normalize_source(
+                    relative_path=result.get("relative_path") or result.get("file_path") or "",
+                    line_start=result.get("start_line") or result.get("line_start"),
+                    line_end=result.get("end_line") or result.get("line_end"),
+                    symbol=result.get("qualified_name") or result.get("symbol_name"),
+                    source_type=result.get("symbol_type"),
+                    source_role="definition",
+                    extra=result,
+                )
+            )
+
+        return definitions
+
     def read_file(
         self,
         file_path: str,
@@ -200,18 +326,35 @@ class CodebaseTools:
     def find_references(
         self,
         symbol_name: str,
-        include_definition: bool = True,
+        include_definition: bool = False,
         max_results: int = 50,
     ) -> List[Dict[str, Any]]:
         """
-        Find references to a symbol by scanning Python files.
+        Find lexical references to a symbol by scanning Python files.
 
-        This is a lightweight reference search.
-        It looks for exact symbol usage in .py files.
+        This is different from graph callers:
+        - It can find imports.
+        - It can find direct calls/usages.
+        - It can optionally include definitions.
+
+        By default, definitions are excluded because "Where is X used?"
+        should return usages/references, not the definition itself.
         """
         references: List[Dict[str, Any]] = []
 
-        pattern = re.compile(rf"\b{re.escape(symbol_name)}\b")
+        symbol_name = symbol_name.strip()
+
+        if not symbol_name:
+            return references
+
+        short_symbol = symbol_name.split(".")[-1]
+
+        patterns = [
+            re.compile(rf"\b{re.escape(short_symbol)}\b"),
+        ]
+
+        if "." in symbol_name:
+            patterns.append(re.compile(re.escape(symbol_name)))
 
         for file_path in self.repo_root.rglob("*"):
             if not file_path.is_file():
@@ -232,49 +375,72 @@ class CodebaseTools:
                 continue
 
             for line_number, line in enumerate(lines, start=1):
-                if not pattern.search(line):
+                if not any(pattern.search(line) for pattern in patterns):
                     continue
 
                 stripped = line.strip()
 
                 is_definition = (
-                    stripped.startswith(f"def {symbol_name}(")
-                    or stripped.startswith(f"async def {symbol_name}(")
-                    or stripped.startswith(f"class {symbol_name}(")
-                    or stripped.startswith(f"class {symbol_name}:")
+                    stripped.startswith(f"def {short_symbol}(")
+                    or stripped.startswith(f"async def {short_symbol}(")
+                    or stripped.startswith(f"class {short_symbol}(")
+                    or stripped.startswith(f"class {short_symbol}:")
                 )
 
                 if is_definition and not include_definition:
                     continue
+
+                reference_type = "definition" if is_definition else "reference"
 
                 try:
                     relative_path = str(file_path.resolve().relative_to(self.repo_root))
                 except ValueError:
                     relative_path = str(file_path)
 
+                relative_path = relative_path.replace("\\", "/")
+
                 references.append(
-                    {
-                        "file_path": str(file_path.resolve()),
-                        "relative_path": relative_path,
-                        "line_number": line_number,
-                        "line": line,
-                        "is_definition": is_definition,
-                    }
+                    normalize_source(
+                        relative_path=relative_path,
+                        line_start=line_number,
+                        line_end=line_number,
+                        symbol=symbol_name,
+                        source_type=reference_type,
+                        source_role=reference_type,
+                        extra={
+                            "file_path": str(file_path.resolve()),
+                            "line_number": line_number,
+                            "line": line,
+                            "is_definition": is_definition,
+                            "reference_type": reference_type,
+                        },
+                    )
                 )
 
                 if len(references) >= max_results:
                     return references
 
         return references
-    
+
     def find_callers(self, symbol_name: str) -> Dict[str, Any]:
         """
         Find functions/methods that call the given symbol.
+
+        If the symbol is ambiguous, return candidates instead of guessing.
         """
-        result = self.code_graph.find_callers(symbol_name)
+        candidates = self.resolve_graph_symbols(symbol_name)
+
+        if len(candidates) > 1:
+            return self._build_ambiguous_symbol_response(symbol_name, candidates)
+
+        resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
+
+        result = self.code_graph.find_callers(resolved_symbol)
 
         return {
             "symbol": symbol_name,
+            "resolved_symbol": resolved_symbol,
+            "ambiguous": False,
             "targets": [
                 format_graph_node(node, node_role="target")
                 for node in result["targets"]
@@ -284,15 +450,26 @@ class CodebaseTools:
                 for node in result["callers"]
             ],
         }
-    
+
     def find_callees(self, symbol_name: str) -> Dict[str, Any]:
         """
         Find functions/methods called by the given symbol.
+
+        If the symbol is ambiguous, return candidates instead of guessing.
         """
-        result = self.code_graph.find_callees(symbol_name)
+        candidates = self.resolve_graph_symbols(symbol_name)
+
+        if len(candidates) > 1:
+            return self._build_ambiguous_symbol_response(symbol_name, candidates)
+
+        resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
+
+        result = self.code_graph.find_callees(resolved_symbol)
 
         return {
             "symbol": symbol_name,
+            "resolved_symbol": resolved_symbol,
+            "ambiguous": False,
             "sources": [
                 format_graph_node(node, node_role="source")
                 for node in result["sources"]
@@ -302,18 +479,29 @@ class CodebaseTools:
                 for node in result["callees"]
             ],
         }
-    
+
     def impact_analysis(self, symbol_name: str, max_depth: int = 2) -> Dict[str, Any]:
         """
         Find code nodes that may be affected if a symbol changes or is removed.
+
+        If the symbol is ambiguous, return candidates instead of guessing.
         """
+        candidates = self.resolve_graph_symbols(symbol_name)
+
+        if len(candidates) > 1:
+            return self._build_ambiguous_symbol_response(symbol_name, candidates)
+
+        resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
+
         result = self.code_graph.impact_analysis(
-            symbol=symbol_name,
+            symbol=resolved_symbol,
             max_depth=max_depth,
         )
 
         return {
             "symbol": symbol_name,
+            "resolved_symbol": resolved_symbol,
+            "ambiguous": False,
             "targets": [
                 format_graph_node(node, node_role="target")
                 for node in result["targets"]

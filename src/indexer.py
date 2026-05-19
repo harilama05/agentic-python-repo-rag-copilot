@@ -98,6 +98,22 @@ def count_ignored_files(repo_path: str | Path) -> int:
     return ignored_count
 
 
+def build_optional_llm(enabled: bool) -> GeminiLLM | None:
+    """
+    Build an optional Gemini client.
+
+    If disabled or unavailable, return None so the router can fall back to
+    rule-based routing and answer generation can fall back to tool-based output.
+    """
+    if not enabled:
+        return None
+
+    try:
+        return GeminiLLM()
+    except Exception:
+        return None
+
+
 def build_codebase_agent(
     repo_path: str | Path,
     collection_name: str | None = None,
@@ -224,15 +240,15 @@ def build_codebase_agent(
         code_graph=code_graph,
     )
 
-    llm = GeminiLLM() if (use_llm or use_llm_router) else None
-    if llm is None:
-        raise ValueError("LLM Query Router requires GeminiLLM, but llm is None.")
+    shared_llm = build_optional_llm(use_llm or use_llm_router)
+    router_llm = shared_llm if use_llm_router else None
+    answer_llm = shared_llm if use_llm else None
 
-    query_router = LLMQueryRouter(llm=llm)
+    query_router = LLMQueryRouter(llm=router_llm)
     agent = CodebaseAgent(
         tools=tools,
         query_router=query_router,
-        llm=llm,
+        llm=answer_llm,
         use_llm=use_llm,
     )
 
@@ -316,17 +332,16 @@ def load_existing_codebase_agent(
         code_graph=code_graph,
     )
 
-    llm = GeminiLLM() if (use_llm or use_llm_router) else None
+    shared_llm = build_optional_llm(use_llm or use_llm_router)
+    router_llm = shared_llm if use_llm_router else None
+    answer_llm = shared_llm if use_llm else None
 
-    if llm is None:
-        raise ValueError("LLM Query Router requires GeminiLLM, but llm is None.")
-
-    query_router = LLMQueryRouter(llm=llm)
+    query_router = LLMQueryRouter(llm=router_llm)
 
     agent = CodebaseAgent(
         tools=tools,
         query_router=query_router,
-        llm=llm,
+        llm=answer_llm,
         use_llm=use_llm,
     )
 
