@@ -3,9 +3,10 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
+from sqlalchemy import delete, select, func
+from datetime import datetime, timezone
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
-from sqlalchemy import delete, select
 
 from src.config import RUNTIME_DIR
 from src.constants import TEMPORARY_REPO_SOURCE_TYPES
@@ -15,12 +16,38 @@ from src.settings import QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL
 import os
 import stat
 import time
+
 @dataclass
 class RepositorySnapshot:
     repo_id: str
+    repo_name: str
     source_type: str | None
     is_persistent: bool
     local_path: str | None
+    collection_name: str | None
+    file_count: int
+    doc_count: int
+    ignored_file_count: int
+    chunk_count: int
+
+@dataclass
+class RepositoryListItem:
+    repo_id: str
+    repo_name: str
+    source_type: str | None
+    is_persistent: bool
+    local_path: str | None
+    collection_name: str | None
+    chunk_count: int
+
+@dataclass
+class TemporaryRepositoryItem:
+    repo_id: str
+    repo_name: str
+    source_type: str | None
+    is_persistent: bool
+    local_path: str | None
+    expires_at: datetime | None
 
 def is_temporary_repository(source_type: str | None, is_persistent: bool | None) -> bool:
     """
@@ -50,9 +77,22 @@ def get_repository_snapshot(repo_id: str) -> Optional[RepositorySnapshot]:
 
         return RepositorySnapshot(
             repo_id=repo.repo_id,
+            repo_name=(
+                getattr(repo, "repo_name", None)
+                or getattr(repo, "name", None)
+                or repo.repo_id
+            ),
             source_type=getattr(repo, "source_type", None),
             is_persistent=bool(getattr(repo, "is_persistent", False)),
             local_path=getattr(repo, "local_path", None),
+            collection_name=(
+                getattr(repo, "collection_name", None)
+                or repo.repo_id
+            ),
+            file_count=int(getattr(repo, "file_count", 0) or 0),
+            doc_count=int(getattr(repo, "doc_count", 0) or 0),
+            ignored_file_count=int(getattr(repo, "ignored_file_count", 0) or 0),
+            chunk_count=int(getattr(repo, "chunk_count", 0) or 0),
         )
 
 
@@ -245,3 +285,128 @@ def cleanup_temporary_repository(repo_id: str | None) -> bool:
         delete_runtime_files=True,
         only_if_temporary=True,
     )
+
+def list_persistent_repositories() -> list[RepositoryListItem]:
+    """
+    List repositories that should be loadable without re-indexing.
+
+    This is mainly for company/admin-indexed repositories.
+    """
+    with get_db_session() as session:
+        repos = session.execute(
+            select(Repository).where(Repository.is_persistent.is_(True))
+        ).scalars().all()
+
+        items: list[RepositoryListItem] = []
+
+        for repo in repos:
+            repo_id = repo.repo_id
+
+            chunk_count = session.execute(
+                select(func.count())
+                .select_from(Chunk)
+                .where(Chunk.repo_id == repo_id)
+            ).scalar_one()
+
+            repo_name = (
+                getattr(repo, "repo_name", None)
+                or getattr(repo, "name", None)
+                or repo_id
+            )
+
+            collection_name = (
+                getattr(repo, "collection_name", None)
+                or repo_id
+            )
+
+            items.append(
+                RepositoryListItem(
+                    repo_id=repo_id,
+                    repo_name=repo_name,
+                    source_type=getattr(repo, "source_type", None),
+                    is_persistent=bool(getattr(repo, "is_persistent", False)),
+                    local_path=getattr(repo, "local_path", None),
+                    collection_name=collection_name,
+                    chunk_count=int(chunk_count or 0),
+                )
+            )
+
+        return items
+    
+def list_expired_temporary_repositories(
+    now: datetime | None = None,
+) -> list[TemporaryRepositoryItem]:
+    """
+    List temporary repositories whose expires_at is already reached.
+
+    Temporary repos are user-provided GitHub/ZIP repos:
+    - is_persistent = False
+    - source_type in TEMPORARY_REPO_SOURCE_TYPES
+    - expires_at <= now
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    with get_db_session() as session:
+        repos = session.execute(
+            select(Repository).where(
+                Repository.is_persistent.is_(False),
+                Repository.expires_at.is_not(None),
+                Repository.expires_at <= now,
+            )
+        ).scalars().all()
+
+        items: list[TemporaryRepositoryItem] = []
+
+        for repo in repos:
+            source_type = getattr(repo, "source_type", None)
+            is_persistent = bool(getattr(repo, "is_persistent", False))
+
+            if not is_temporary_repository(source_type, is_persistent):
+                continue
+
+            repo_name = (
+                getattr(repo, "repo_name", None)
+                or getattr(repo, "name", None)
+                or repo.repo_id
+            )
+
+            items.append(
+                TemporaryRepositoryItem(
+                    repo_id=repo.repo_id,
+                    repo_name=repo_name,
+                    source_type=source_type,
+                    is_persistent=is_persistent,
+                    local_path=getattr(repo, "local_path", None),
+                    expires_at=getattr(repo, "expires_at", None),
+                )
+            )
+
+        return items
+    
+def cleanup_expired_temporary_repositories(
+    *,
+    dry_run: bool = False,
+) -> list[str]:
+    """
+    Delete expired temporary repositories.
+
+    Returns the repo_ids that were deleted, or would be deleted in dry-run mode.
+    """
+    expired_repos = list_expired_temporary_repositories()
+
+    repo_ids: list[str] = []
+
+    for repo in expired_repos:
+        repo_ids.append(repo.repo_id)
+
+        if dry_run:
+            continue
+
+        delete_repository(
+            repo_id=repo.repo_id,
+            delete_runtime_files=True,
+            only_if_temporary=True,
+        )
+
+    return repo_ids
