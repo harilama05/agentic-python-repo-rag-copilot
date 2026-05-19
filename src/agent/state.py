@@ -22,6 +22,10 @@ class AgentState(TypedDict, total=False):
     # Classification
     query_type: str
     symbol_candidate: Optional[str]
+    rewritten_query: str
+    router: str
+    router_confidence: float
+    router_reason: str
 
     # Retrieval
     search_results: List[SearchResult]

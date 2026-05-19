@@ -16,6 +16,12 @@ STOPWORDS = {
     "in", "of", "to", "for", "and", "or", "with", "find", "show",
     "me", "can", "you", "this", "that", "tell", "about", "code",
     "related", "all", "get", "list",
+    "who", "calls", "called", "caller", "callers", "callee", "callees",
+    "impact", "impacts", "affected", "affect", "change", "changes", "changed",
+    "if", "i", "we",
+    "give", "project", "repo", "repository", "setup", "install", "installation",
+    "architecture", "overview", "readme", "documentation", "docs", "purpose",
+    "flow", "execution", "request", "chain",
 }
 
 
@@ -38,6 +44,13 @@ def extract_symbol_candidate(question: str) -> Optional[str]:
     backtick = re.search(r"`([^`]+)`", question)
     if backtick:
         return backtick.group(1).strip()
+
+    dotted = re.findall(
+        r"\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\b",
+        question,
+    )
+    if dotted:
+        return dotted[0]
 
     tokens = re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", question)
     candidates = []
@@ -64,11 +77,48 @@ def classify_query(question: str) -> str:
     """
     Classify a user question into one of:
     - ``reference_query``: "Where is X used?"
+    - ``callee_query``: "What does X call?"
+    - ``impact_query``: "What is affected if X changes?"
+    - ``documentation_query``: "How do I set up this project?"
+    - ``flow_query``: "What is the request/execution flow?"
     - ``location_query``: "Where is X defined?"
     - ``explanation_query``: "What does X do?"
     - ``search_query``: General code search
     """
     q = question.lower()
+
+    if any(
+        p in q
+        for p in [
+            "project",
+            "repo",
+            "repository",
+            "overview",
+            "setup",
+            "install",
+            "architecture",
+            "tech stack",
+            "readme",
+            "documentation",
+            "docs",
+            "purpose",
+        ]
+    ):
+        return "documentation_query"
+
+    if any(p in q for p in ["flow", "request flow", "execution flow", "call chain"]):
+        return "flow_query"
+
+    if any(p in q for p in ["impact", "affected", "affect", "break", "if i change", "if we change"]):
+        return "impact_query"
+
+    if any(p in q for p in ["what does", "what do"]) and any(
+        p in q for p in ["call", "calls", "invoke", "invokes"]
+    ):
+        return "callee_query"
+
+    if any(p in q for p in ["callees", "called by this", "functions called", "methods called"]):
+        return "callee_query"
 
     if any(p in q for p in ["used", "called", "references", "referenced", "who calls"]):
         return "reference_query"
@@ -80,3 +130,4 @@ def classify_query(question: str) -> str:
         return "explanation_query"
 
     return "search_query"
+

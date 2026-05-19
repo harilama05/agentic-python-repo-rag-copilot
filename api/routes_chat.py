@@ -3,7 +3,7 @@ Chat API routes.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -19,6 +19,7 @@ class ChatResponse(BaseModel):
     tools_used: list
     sources: list
     citations: list
+    raw_results: dict = Field(default_factory=dict)
 
 
 @router.post("/ask", response_model=ChatResponse)
@@ -43,6 +44,7 @@ async def ask_question(request: ChatRequest):
             tools_used=response.tools_used,
             sources=response.sources,
             citations=response.citations,
+            raw_results=response.raw_results,
         )
 
     except Exception as exc:

@@ -4,10 +4,13 @@ appropriate pipeline path in the agent graph.
 """
 
 from src.agent.state import AgentState
-from src.retrieval.query_transform import classify_query, extract_symbol_candidate
+from src.agent.query_router import LLMQueryRouter, rule_based_fallback_route
 
 
-def route_query(state: AgentState) -> AgentState:
+def route_query(
+    state: AgentState,
+    query_router: LLMQueryRouter | None = None,
+) -> AgentState:
     """
     Classify the user question and extract symbol candidates.
 
@@ -15,8 +18,17 @@ def route_query(state: AgentState) -> AgentState:
     """
     question = state["question"]
 
-    state["query_type"] = classify_query(question)
-    state["symbol_candidate"] = extract_symbol_candidate(question)
+    if query_router:
+        plan = query_router.route(question)
+    else:
+        plan = rule_based_fallback_route(question)
+
+    state["query_type"] = plan.query_type
+    state["symbol_candidate"] = plan.symbol
+    state["rewritten_query"] = plan.rewritten_query
+    state["router"] = plan.router
+    state["router_confidence"] = plan.confidence
+    state["router_reason"] = plan.reason
     state["tools_used"] = []
     state["search_results"] = []
     state["reranked_results"] = []
@@ -37,7 +49,14 @@ def should_use_symbol_search(state: AgentState) -> str:
     query_type = state.get("query_type", "search_query")
     symbol = state.get("symbol_candidate")
 
-    if symbol and query_type in ("reference_query", "location_query", "explanation_query"):
+    if symbol and query_type in (
+        "reference_query",
+        "caller_query",
+        "callee_query",
+        "impact_query",
+        "location_query",
+        "explanation_query",
+    ):
         return "symbol_retrieve"
 
     return "hybrid_retrieve"

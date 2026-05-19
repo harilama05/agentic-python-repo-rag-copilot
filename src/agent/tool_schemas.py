@@ -56,7 +56,7 @@ TOOL_SCHEMAS = [
             "name": "find_references",
             "description": (
                 "Find all places where a symbol (function/class/method) is "
-                "used or referenced in the codebase."
+                "used, referenced, or called in the codebase."
             ),
             "parameters": {
                 "type": "object",
@@ -64,6 +64,51 @@ TOOL_SCHEMAS = [
                     "symbol_name": {
                         "type": "string",
                         "description": "The symbol name to find references for.",
+                    },
+                },
+                "required": ["symbol_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_callees",
+            "description": (
+                "Use the code graph to find functions/classes/methods that a "
+                "specific function or method calls."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol_name": {
+                        "type": "string",
+                        "description": "The function or method name to inspect.",
+                    },
+                },
+                "required": ["symbol_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "impact_analysis",
+            "description": (
+                "Use the code graph to find callers that may be affected if a "
+                "specific function, class, or method changes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol_name": {
+                        "type": "string",
+                        "description": "The symbol name to analyze.",
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Caller traversal depth (default 2).",
+                        "default": 2,
                     },
                 },
                 "required": ["symbol_name"],

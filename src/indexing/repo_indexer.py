@@ -11,6 +11,7 @@ from typing import Optional
 from src.config import settings
 from src.schemas import SourceType
 from src.ingestion.scanner import scan_repository
+from src.ingestion.repository_files import PreparedRepository
 from src.ingestion.document_registry import DocumentRegistry
 from src.indexing.indexer import Indexer
 from src.indexing.incremental_indexer import IncrementalIndexer
@@ -18,11 +19,14 @@ from src.storage.vector_store import VectorStore
 from src.storage.keyword_store import KeywordStore
 from src.storage.metadata_store import MetadataStore
 from src.storage.file_store import FileStore
+from src.storage.graph_store import GraphStore
+from src.graph.code_graph import build_code_graph
 from src.retrieval.retriever import Retriever
 from src.reranking.reranker import Reranker
 from src.generation.answer_generator import AnswerGenerator
 from src.agent.tools import AgentTools
 from src.agent.graph import AgentGraph, create_agent_graph
+from src.agent.query_router import LLMQueryRouter
 
 
 @dataclass
@@ -36,6 +40,7 @@ class IndexedCodebase:
     keyword_store: KeywordStore
     metadata_store: MetadataStore
     file_store: FileStore
+    graph_store: GraphStore
     retriever: Retriever
     agent: AgentGraph
 
@@ -58,6 +63,69 @@ def index_repository(
     if not repo_path.exists():
         raise FileNotFoundError(f"Repo path does not exist: {repo_path}")
 
+    files = scan_repository(repo_path)
+
+    return _index_repository_files(
+        repo_path=repo_path,
+        files=files,
+        collection_name=collection_name,
+        reset=reset,
+        incremental=incremental,
+        use_reranker=use_reranker,
+        use_llm=use_llm,
+        source=SourceType.REPO,
+    )
+
+
+def index_prepared_repository(
+    prepared_repo: PreparedRepository,
+    collection_name: Optional[str] = None,
+    reset: bool = True,
+    incremental: bool = False,
+    use_reranker: bool = True,
+    use_llm: bool = True,
+    source: SourceType = SourceType.REPO,
+) -> IndexedCodebase:
+    """
+    Index a repository that was already traversed and filtered by ingestion.
+
+    This is the API-friendly entry point for GitHub and ZIP ingestion. It uses
+    ``prepared_repo.files`` directly, so unsupported files from the original
+    clone/archive are not passed to the parser/indexer.
+    """
+    return _index_repository_files(
+        repo_path=prepared_repo.local_path,
+        files=prepared_repo.files,
+        collection_name=collection_name or prepared_repo.repo_id,
+        reset=reset,
+        incremental=incremental,
+        use_reranker=use_reranker,
+        use_llm=use_llm,
+        source=source,
+    )
+
+
+def _index_repository_files(
+    repo_path: Path,
+    files: list[Path],
+    collection_name: Optional[str] = None,
+    reset: bool = True,
+    incremental: bool = False,
+    use_reranker: bool = True,
+    use_llm: bool = True,
+    source: SourceType = SourceType.REPO,
+) -> IndexedCodebase:
+    """Index a concrete list of files from a repository root."""
+    repo_path = Path(repo_path).resolve()
+
+    if not repo_path.exists():
+        raise FileNotFoundError(f"Repo path does not exist: {repo_path}")
+
+    if not repo_path.is_dir():
+        raise NotADirectoryError(f"Repo path is not a directory: {repo_path}")
+
+    files = [Path(file_path).resolve() for file_path in files]
+
     # Ensure data directories exist
     settings.ensure_dirs()
 
@@ -74,12 +142,14 @@ def index_repository(
     keyword_store = KeywordStore(persist_dir=settings.bm25_persist_dir)
     metadata_store = MetadataStore(persist_dir=settings.metadata_persist_dir)
     file_store = FileStore(persist_dir=settings.metadata_persist_dir)
+    graph_store = GraphStore(persist_dir=settings.graph_persist_dir)
 
     if reset:
         vector_store.reset()
         keyword_store.reset()
         metadata_store.clear()
         file_store.clear()
+        graph_store.clear()
 
     # Build indexer
     indexer = Indexer(
@@ -88,9 +158,6 @@ def index_repository(
         metadata_store=metadata_store,
         file_store=file_store,
     )
-
-    # Scan
-    files = scan_repository(repo_path)
 
     # Index
     total_chunks = 0
@@ -103,7 +170,7 @@ def index_repository(
             chunks = inc_indexer.index_file(
                 file_path=file_path,
                 repo_root=repo_path,
-                source=SourceType.REPO,
+                source=source,
             )
             total_chunks += len(chunks)
 
@@ -113,7 +180,7 @@ def index_repository(
             chunks = indexer.index_file(
                 file_path=file_path,
                 repo_root=repo_path,
-                source=SourceType.REPO,
+                source=source,
             )
             total_chunks += len(chunks)
 
@@ -121,6 +188,10 @@ def index_repository(
     keyword_store.save()
     metadata_store.save()
     file_store.save()
+
+    code_graph = build_code_graph(repo_path)
+    graph_store.set_graph(code_graph)
+    graph_store.save()
 
     # Build retriever and agent
     retriever = Retriever(
@@ -137,15 +208,24 @@ def index_repository(
             reranker = None
 
     generator = None
+    query_router = None
     if use_llm and settings.openai_api_key:
         try:
-            generator = AnswerGenerator()
+            generator = AnswerGenerator(
+                api_key=settings.openai_api_key,
+                base_url=settings.openai_api_base_url,
+            )
         except Exception:
             generator = None
+        try:
+            query_router = LLMQueryRouter()
+        except Exception:
+            query_router = None
 
     tools = AgentTools(
         retriever=retriever,
         file_store=file_store,
+        graph_store=graph_store,
         repo_root=repo_path,
     )
 
@@ -154,6 +234,7 @@ def index_repository(
         retriever=retriever,
         reranker=reranker,
         generator=generator,
+        query_router=query_router,
     )
 
     return IndexedCodebase(
@@ -165,6 +246,7 @@ def index_repository(
         keyword_store=keyword_store,
         metadata_store=metadata_store,
         file_store=file_store,
+        graph_store=graph_store,
         retriever=retriever,
         agent=agent,
     )

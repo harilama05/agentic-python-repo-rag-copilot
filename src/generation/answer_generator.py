@@ -13,6 +13,7 @@ import openai
 from src.config import settings
 from src.generation.prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 from src.generation.context_builder import build_context
+from src.generation.citation_builder import build_citations
 from src.schemas import SearchResult
 
 
@@ -44,7 +45,7 @@ class AnswerGenerator:
         """
         Generate an answer from retrieved results.
 
-        Returns a dict with ``answer``, ``token_usage``, and ``model``.
+        Returns a dict with ``answer``, ``token_usage``, ``model``, and ``sources``.
         """
         context = build_context(results, max_chunks=max_chunks)
         user_prompt = USER_PROMPT_TEMPLATE.format(
@@ -65,35 +66,51 @@ class AnswerGenerator:
             )
 
             answer = response.choices[0].message.content or ""
+            
+            # Build citations from results
+            citations = build_citations(results)
+            
             usage = {
                 "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
                 "completion_tokens": response.usage.completion_tokens if response.usage else 0,
                 "total_tokens": response.usage.total_tokens if response.usage else 0,
             }
 
+            # Add sources section at the end
+            sources_section = "\n\n---\n\n**Sources:**\n" + "\n".join(f"- {c}" for c in citations)
+
             return {
-                "answer": answer,
+                "answer": answer + sources_section,
                 "token_usage": usage,
                 "model": self._model,
+                "sources": citations,
             }
 
         except openai.AuthenticationError:
+            citations = build_citations(results)
+            sources_section = "\n\n---\n\n**Sources:**\n" + "\n".join(f"- {c}" for c in citations)
+            
             return {
                 "answer": (
                     "⚠️ **LLM API key not configured.** "
                     "Please set `OPENAI_API_KEY` in your `.env` file.\n\n"
-                    "Showing raw retrieved context instead:\n\n" + context
+                    "**Raw Code Context:**\n\n" + context + sources_section
                 ),
                 "token_usage": {},
                 "model": self._model,
+                "sources": citations,
             }
 
         except Exception as exc:
+            citations = build_citations(results)
+            sources_section = "\n\n---\n\n**Sources:**\n" + "\n".join(f"- {c}" for c in citations)
+            
             return {
                 "answer": (
                     f"⚠️ **LLM call failed:** {exc}\n\n"
-                    "Showing raw retrieved context instead:\n\n" + context
+                    "**Raw Code Context:**\n\n" + context + sources_section
                 ),
                 "token_usage": {},
                 "model": self._model,
+                "sources": citations,
             }

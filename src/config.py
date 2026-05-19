@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     # ── LLM ──────────────────────────────────────────────────────────
     openai_api_key: Optional[str] = None
+    openai_api_base_url: Optional[str] = None
     llm_model: str = DEFAULT_LLM_MODEL
     llm_temperature: float = DEFAULT_LLM_TEMPERATURE
     llm_max_tokens: int = DEFAULT_LLM_MAX_TOKENS
@@ -57,6 +58,7 @@ class Settings(BaseSettings):
 
     # ── Metadata store ───────────────────────────────────────────────
     metadata_persist_dir: Path = Path(__file__).resolve().parents[1] / "data" / "indexes" / "metadata"
+    graph_persist_dir: Path = Path(__file__).resolve().parents[1] / "data" / "indexes" / "graph"
 
     def ensure_dirs(self) -> None:
         """Tạo tất cả các thư mục cần thiết."""
@@ -70,6 +72,7 @@ class Settings(BaseSettings):
             self.chroma_persist_dir,
             self.bm25_persist_dir,
             self.metadata_persist_dir,
+            self.graph_persist_dir,
         ]:
             d.mkdir(parents=True, exist_ok=True)
 

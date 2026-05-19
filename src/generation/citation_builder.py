@@ -56,3 +56,27 @@ def build_source_dicts(results: List[SearchResult]) -> List[Dict[str, Any]]:
         })
 
     return sources
+
+
+def build_citations_from_sources(sources: List[Dict[str, Any]]) -> List[str]:
+    """Build human-readable citation strings from graph/tool sources."""
+    citations: List[str] = []
+
+    for source in sources:
+        relative_path = source.get("relative_path", "unknown")
+        start_line = source.get("start_line") or source.get("line_number") or "?"
+        end_line = source.get("end_line") or start_line
+        qualified_name = source.get("qualified_name", "")
+        symbol_type = source.get("symbol_type", "")
+
+        if start_line == end_line:
+            location = f"{relative_path}:{start_line}"
+        else:
+            location = f"{relative_path}:{start_line}-{end_line}"
+
+        if qualified_name:
+            citations.append(f"{location} ({symbol_type}: {qualified_name})")
+        else:
+            citations.append(location)
+
+    return citations
