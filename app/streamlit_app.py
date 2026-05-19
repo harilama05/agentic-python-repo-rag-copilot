@@ -1,16 +1,18 @@
 import streamlit as st
-from src.indexer import build_codebase_agent
-from pathlib import Path
+
 from src.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
 from src.constants import (
-    REPO_SOURCE_COMPANY,
-    REPO_SOURCE_CUSTOM_LOCAL,
     REPO_SOURCE_GITHUB,
     REPO_SOURCE_ZIP_UPLOAD,
 )
-from src.storage.repository_lifecycle import cleanup_temporary_repository
 from src.ingestion.zip_ingestion import ingest_zip_bytes
 from src.ingestion.github_ingestion import clone_github_repo
+from src.indexer import build_codebase_agent, load_existing_codebase_agent
+from src.storage.repository_lifecycle import (
+    cleanup_temporary_repository,
+    list_persistent_repositories,
+)
+
 
 def cleanup_active_temporary_repo() -> None:
     active_temp_repo_id = st.session_state.get("active_temp_repo_id")
@@ -23,12 +25,12 @@ def cleanup_active_temporary_repo() -> None:
     if deleted:
         st.session_state.active_temp_repo_id = None
 
+
 st.set_page_config(
     page_title="Agentic RAG Copilot for Python Repositories",
     page_icon="🐍",
     layout="wide",
 )
-
 
 
 st.title("🐍 Agentic RAG Copilot for Python Repositories")
@@ -37,8 +39,8 @@ st.markdown(
     """
 A read-only AI copilot for Python repositories.
 
-It scans a Python repo, chunks code using AST, indexes functions/classes/methods,
-and answers codebase questions using agent tools.
+It can load already-indexed company repositories, or temporarily index a public
+GitHub repository / uploaded ZIP file for the current session.
 """
 )
 
@@ -54,30 +56,47 @@ if "chat_history" not in st.session_state:
 
 
 with st.sidebar:
-    st.header("Repository Indexing")
+    st.header("Repository")
 
     repo_mode = st.radio(
         "Repository mode",
-        options=["Company Repo", "Custom Repo", "GitHub URL", "ZIP Upload"],
+        options=[
+            "Company Repo",
+            "GitHub URL",
+            "ZIP Upload",
+        ],
         index=0,
     )
 
-    if repo_mode == "Custom Repo":
-        repo_path = st.text_input(
-            "Python repo path",
-            value="examples/sample_python_repo",
-            help="Enter a local path to a Python repository.",
-        )
+    index_button = False
+    load_existing_button = False
+    selected_existing_repo_id = None
 
-        collection_name = st.text_input(
-            "Collection name",
-            value="custom_repo",
-        )
+    if repo_mode == "Company Repo":
+        persistent_repos = list_persistent_repositories()
 
-        repo_id = collection_name
-        repo_name = Path(repo_path).name
-        source_type = REPO_SOURCE_CUSTOM_LOCAL
-        is_persistent = False
+        if not persistent_repos:
+            st.warning(
+                "No indexed company repositories found. "
+                "Run the company repo indexing script first."
+            )
+        else:
+            repo_options = {
+                f"{repo.repo_name} | {repo.repo_id} | chunks={repo.chunk_count}": repo.repo_id
+                for repo in persistent_repos
+            }
+
+            selected_label = st.selectbox(
+                "Company repository",
+                options=list(repo_options.keys()),
+            )
+
+            selected_existing_repo_id = repo_options[selected_label]
+
+        st.caption(
+            "Company repositories are loaded from PostgreSQL + Qdrant. "
+            "They are indexed or re-indexed with an internal script, not from this UI."
+        )
 
     elif repo_mode == "GitHub URL":
         github_url = st.text_input(
@@ -91,8 +110,11 @@ with st.sidebar:
             help="Leave empty to use the default branch.",
         )
 
-        st.caption("Only public GitHub repositories are supported.")
-    
+        st.caption(
+            "Only public GitHub repositories are supported. "
+            "This repository will be indexed temporarily."
+        )
+
     elif repo_mode == "ZIP Upload":
         uploaded_zip = st.file_uploader(
             "Upload a Python repository ZIP file",
@@ -103,30 +125,6 @@ with st.sidebar:
             "Upload a .zip file containing a Python repository. "
             "The extracted files are stored temporarily in data/runtime/uploads/."
         )
-
-    else:
-        from src.company_repos import get_company_repo_options, get_company_repo
-
-        company_options = get_company_repo_options()
-        selected_name = st.selectbox(
-            "Select company repo",
-            options=list(company_options.keys()),
-        )
-
-        selected_repo_id = company_options[selected_name]
-        selected_repo = get_company_repo(selected_repo_id)
-
-        st.caption(selected_repo.description)
-
-        repo_path = str(selected_repo.path)
-        collection_name = selected_repo.repo_id
-
-        repo_id = selected_repo.repo_id
-        repo_name = selected_name
-        source_type = REPO_SOURCE_COMPANY
-        is_persistent = True
-
-        st.write(f"Repo path: `{repo_path}`")
 
     retrieval_mode_label = st.radio(
         "Retrieval mode",
@@ -147,12 +145,47 @@ with st.sidebar:
         retrieval_mode = RETRIEVAL_MODE_FAST
 
     reset_collection = True
-
     use_llm_router = True
-
     use_llm = True
 
-    index_button = st.button("Index repository", type="primary")
+    if repo_mode == "Company Repo":
+        load_existing_button = st.button("Load repository", type="primary")
+    else:
+        index_button = st.button("Index temporary repository", type="primary")
+
+    if load_existing_button:
+        if not selected_existing_repo_id:
+            st.error("Please select an indexed company repository.")
+            st.stop()
+
+        try:
+            cleanup_active_temporary_repo()
+
+            with st.spinner("Loading indexed repository from database..."):
+                indexed = load_existing_codebase_agent(
+                    repo_id=selected_existing_repo_id,
+                    retrieval_mode=retrieval_mode,
+                    use_llm=use_llm,
+                    use_llm_router=use_llm_router,
+                )
+
+            st.session_state.indexed_codebase = indexed
+            st.session_state.chat_history = []
+            st.session_state.active_temp_repo_id = None
+
+            st.success("Repository loaded successfully!")
+            st.write(f"Repo ID: {indexed.repo_id}")
+            st.write(f"Source type: {indexed.source_type}")
+            st.write(f"Persistent: {indexed.is_persistent}")
+            st.write(f"Python files indexed: {indexed.file_count}")
+            st.write(f"Documentation files indexed: {indexed.doc_count}")
+            st.write(f"Other files ignored: {indexed.ignored_file_count}")
+            st.write(f"Total chunks: {indexed.chunk_count}")
+            st.write(f"Collection: {indexed.collection_name}")
+            st.write(f"Retrieval mode: {retrieval_mode}")
+
+        except Exception as exc:
+            st.error(f"Load failed: {exc}")
 
     if index_button:
         try:
@@ -164,7 +197,7 @@ with st.sidebar:
                 if not github_url.strip():
                     st.error("Please enter a GitHub repository URL.")
                     st.stop()
-                
+
                 cleanup_active_temporary_repo()
 
                 with st.spinner("Cloning GitHub repository..."):
@@ -206,8 +239,11 @@ with st.sidebar:
                 source_type = REPO_SOURCE_ZIP_UPLOAD
                 is_persistent = False
 
-            with st.spinner("Indexing repository..."):
-                cleanup_active_temporary_repo()
+            else:
+                st.error("This mode does not support temporary indexing.")
+                st.stop()
+
+            with st.spinner("Indexing temporary repository..."):
                 indexed = build_codebase_agent(
                     repo_path=repo_path,
                     collection_name=collection_name,
@@ -234,7 +270,7 @@ with st.sidebar:
             else:
                 st.session_state.active_temp_repo_id = None
 
-            st.success("Repository indexed successfully!")
+            st.success("Temporary repository indexed successfully!")
             st.write(f"Repo ID: {indexed.repo_id}")
             st.write(f"Source type: {indexed.source_type}")
             st.write(f"Persistent: {indexed.is_persistent}")
@@ -253,10 +289,11 @@ with st.sidebar:
     st.header("Example Questions")
     st.markdown(
         """
-- Where is create_user implemented?
-- Where is create_user used?
-- What does UserService do?
-- Find code related to user creation
+- What does this project do?
+- Where is `ModelEvaluator` defined?
+- What does `ModelEvaluator` do?
+- Who calls `TaskService.create_task`?
+- `ModelEvaluator` được tạo ở đâu, mục đích code là gì?
         """
     )
 
@@ -264,7 +301,7 @@ with st.sidebar:
 indexed = st.session_state.indexed_codebase
 
 if indexed is None:
-    st.info("Index a Python repository from the sidebar to start.")
+    st.info("Load a company repository or index a temporary repository from the sidebar to start.")
     st.stop()
 
 
