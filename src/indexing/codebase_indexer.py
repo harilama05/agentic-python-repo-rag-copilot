@@ -12,31 +12,29 @@ from src.agent_core.query_router import LLMQueryRouter
 from src.agent_core.tools import CodebaseTools
 from src.chunking.code_chunker import build_code_chunks
 from src.chunking.markdown_chunker import build_markdown_chunks, scan_markdown_files
-from src.ingestion.scanner import scan_json_files, scan_text_files
-from src.parsing.json_parser import parse_json_file
-from src.parsing.text_parser import parse_text_file
 from src.chunking.text_chunker import build_text_chunks
 from src.core.constants import (
-    DOC_EXTENSIONS,
     IGNORE_DIRS,
+    IGNORE_FILE_NAMES,
     INDEX_STATUS_INDEXED,
-    JSON_EXTENSIONS,
-    PYTHON_EXTENSIONS,
+    MAX_INDEX_FILE_BYTES,
     REPO_SOURCE_COMPANY,
     REPO_SOURCE_CUSTOM_LOCAL,
     REPO_VISIBILITY_COMPANY,
     REPO_VISIBILITY_PRIVATE_SESSION,
-    TEXT_EXTENSIONS,
+    SUPPORTED_INDEX_EXTENSIONS,
 )
+from src.core.settings import RETRIEVAL_MODE_FAST
 from src.generation.answer_generator import GroundedAnswerGenerator
 from src.generation.llm import GeminiLLM
 from src.graph.code_graph import build_code_graph
 from src.indexing.models import IndexedCodebase
+from src.ingestion.scanner import scan_json_files, scan_python_files, scan_text_files
 from src.parsing.ast_parser import parse_python_file
+from src.parsing.json_parser import parse_json_file
+from src.parsing.text_parser import parse_text_file
 from src.retrieval.retriever import CodeRetriever
-from src.ingestion.scanner import scan_python_files
-from src.core.settings import RETRIEVAL_MODE_FAST
-from src.storage.metadata import MetadataStore
+from src.storage.metadata_store import MetadataStore
 from src.storage.qdrant_vector_store import QdrantCodeVectorStore
 
 
@@ -51,8 +49,39 @@ def make_collection_name(repo_path: str | Path) -> str:
     return name
 
 
+def _is_in_ignored_dir(path: Path) -> bool:
+    """Return True if the path is inside an ignored directory."""
+    parts_lower = {part.lower() for part in path.parts}
+
+    return any(
+        ignored_dir.lower() in parts_lower
+        for ignored_dir in IGNORE_DIRS
+    )
+
+
+def _is_ignored_file_name(path: Path) -> bool:
+    """Return True if the file name is explicitly ignored."""
+    return path.name.lower() in IGNORE_FILE_NAMES
+
+
+def _is_over_size_limit(path: Path) -> bool:
+    """Return True if the file exceeds the optional indexing size limit."""
+    if MAX_INDEX_FILE_BYTES is None:
+        return False
+
+    try:
+        return path.stat().st_size > MAX_INDEX_FILE_BYTES
+    except OSError:
+        return True
+
+
 def count_ignored_files(repo_path: str | Path) -> int:
-    """Count files that are not currently indexed by the application."""
+    """Count files that are not currently indexed by the application.
+
+    Files inside ignored directories are skipped from this count because they are
+    intentionally outside the indexing scope. Files with ignored names, unsupported
+    extensions, or files over the optional size limit are counted as ignored.
+    """
     repo_path = Path(repo_path).resolve()
     ignored_count = 0
 
@@ -60,22 +89,22 @@ def count_ignored_files(repo_path: str | Path) -> int:
         if not path.is_file():
             continue
 
-        parts = set(path.parts)
-        if any(ignored_dir in parts for ignored_dir in IGNORE_DIRS):
+        if _is_in_ignored_dir(path):
+            continue
+
+        if _is_ignored_file_name(path):
+            ignored_count += 1
             continue
 
         suffix = path.suffix.lower()
-        name_lower = path.name.lower()
-        parts_lower = {part.lower() for part in path.parts}
 
-        is_python = suffix in PYTHON_EXTENSIONS
-        is_readme = name_lower.startswith("readme") and suffix in DOC_EXTENSIONS
-        is_docs_markdown = "docs" in parts_lower and suffix in DOC_EXTENSIONS
-        is_json = suffix in JSON_EXTENSIONS
-        is_text = suffix in TEXT_EXTENSIONS
-
-        if not (is_python or is_readme or is_docs_markdown or is_json or is_text):
+        if suffix not in SUPPORTED_INDEX_EXTENSIONS:
             ignored_count += 1
+            continue
+
+        if _is_over_size_limit(path):
+            ignored_count += 1
+            continue
 
     return ignored_count
 
@@ -146,6 +175,7 @@ def build_codebase_agent(
     json_files = scan_json_files(repo_path)
     text_files = scan_text_files(repo_path)
     ignored_file_count = count_ignored_files(repo_path)
+
     all_chunks = []
 
     for file_path in python_files:
@@ -166,6 +196,13 @@ def build_codebase_agent(
         parsed_text = parse_text_file(file_path, repo_root=repo_path)
         chunks = build_text_chunks(parsed_text)
         all_chunks.extend(chunks)
+
+    if not all_chunks:
+        supported_extensions = ", ".join(sorted(SUPPORTED_INDEX_EXTENSIONS))
+        raise ValueError(
+            "No indexable chunks were created for this repository. "
+            f"Supported file types: {supported_extensions}."
+        )
 
     code_graph = build_code_graph(repo_path)
     vector_store = QdrantCodeVectorStore(repo_id=repo_id)
@@ -228,6 +265,7 @@ def build_codebase_agent(
     answer_llm = shared_llm if use_llm else None
     query_router = LLMQueryRouter(llm=router_llm)
     answer_generator = GroundedAnswerGenerator(answer_llm) if answer_llm is not None else None
+
     agent = CodebaseAgent(
         tools=tools,
         query_router=query_router,

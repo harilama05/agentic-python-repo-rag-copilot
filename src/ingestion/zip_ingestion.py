@@ -4,7 +4,7 @@ import shutil
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-
+from src.core.constants import SUPPORTED_INDEX_EXTENSIONS
 from src.core.config import RUNTIME_UPLOADS_DIR
 
 
@@ -119,15 +119,26 @@ def _find_repo_root(extract_dir: Path) -> Path:
 
 
 def _validate_python_repo(repo_root: Path) -> None:
-    python_files = list(repo_root.rglob("*.py"))
-    markdown_files = list(repo_root.rglob("*.md"))
-    json_files = list(repo_root.rglob("*.json"))
-    text_files = list(repo_root.rglob("*.txt"))
+    """
+    Validate that the uploaded ZIP contains at least one supported indexable file.
 
-    if not python_files and not markdown_files and not json_files and not text_files:
+    The app is optimized for Python repositories, but it also indexes Markdown,
+    JSON, and TXT files that appear in the repository.
+    """
+    supported_files = []
+
+    for path in repo_root.rglob("*"):
+        if not path.is_file():
+            continue
+
+        if path.suffix.lower() in SUPPORTED_INDEX_EXTENSIONS:
+            supported_files.append(path)
+
+    if not supported_files:
+        supported_extensions = ", ".join(sorted(SUPPORTED_INDEX_EXTENSIONS))
         raise ValueError(
-            "The uploaded ZIP does not look like a supported repository. "
-            "No .py, .md, .json, or .txt files were found."
+            "The uploaded ZIP does not contain any supported files. "
+            f"Supported file types: {supported_extensions}."
         )
 
 

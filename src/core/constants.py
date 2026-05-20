@@ -21,6 +21,18 @@ DOC_EXTENSIONS = {".md", ".markdown"}
 JSON_EXTENSIONS = {".json"}
 TEXT_EXTENSIONS = {".txt"}
 
+# Set to an integer byte limit, for example 2 * 1024 * 1024, to skip large files.
+# Set to None to disable per-file indexing size limits.
+MAX_INDEX_FILE_BYTES = None
+
+IGNORE_FILE_NAMES = {
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "pipfile.lock",
+}
+
 SUPPORTED_INDEX_EXTENSIONS = (
     PYTHON_EXTENSIONS
     | DOC_EXTENSIONS

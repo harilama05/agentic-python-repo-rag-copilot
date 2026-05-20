@@ -10,7 +10,11 @@ from typing import List, Optional
 
 from src.chunking.code_chunker import CodeChunk
 from src.core.constants import DOC_EXTENSIONS, IGNORE_DIRS, SOURCE_TYPE_DOC, SYMBOL_TYPE_DOCUMENTATION
-
+from src.ingestion.scanner import (
+    is_within_index_size_limit,
+    should_ignore_file_name,
+    should_ignore_path,
+)
 
 def should_ignore_path(path: Path) -> bool:
     """Return True if a path lives under an ignored directory."""
@@ -23,25 +27,25 @@ def should_ignore_path(path: Path) -> bool:
     return False
 
 
-def scan_markdown_files(repo_path: str | Path) -> List[Path]:
-    """Scan README and docs markdown files in a repository."""
-    repo_path = Path(repo_path).resolve()
-    markdown_files: List[Path] = []
+def scan_markdown_files(repo_path: str | Path) -> list[Path]:
+    """Scan all Markdown files that should be indexed."""
+    repo_root = Path(repo_path).resolve()
+    markdown_files: list[Path] = []
 
-    for path in repo_path.rglob("*"):
+    for path in repo_root.rglob("*"):
         if not path.is_file():
             continue
 
         if should_ignore_path(path):
             continue
 
-        if path.suffix.lower() not in DOC_EXTENSIONS:
+        if should_ignore_file_name(path):
             continue
 
-        name_lower = path.name.lower()
-        parts_lower = {part.lower() for part in path.parts}
+        if not is_within_index_size_limit(path):
+            continue
 
-        if name_lower.startswith("readme") or "docs" in parts_lower:
+        if path.suffix.lower() in DOC_EXTENSIONS:
             markdown_files.append(path)
 
     return sorted(markdown_files)
