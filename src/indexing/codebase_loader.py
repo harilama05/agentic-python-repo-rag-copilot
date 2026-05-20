@@ -1,7 +1,7 @@
 """Repository loading workflow for already indexed repositories.
 
-This module reconstructs runtime objects from PostgreSQL metadata and Qdrant
-vectors without re-scanning or re-indexing repository files.
+This module reconstructs runtime objects from Supabase/PostgreSQL metadata and
+pgvector embeddings without re-scanning or re-indexing repository files.
 """
 
 from pathlib import Path
@@ -15,7 +15,7 @@ from src.indexing.codebase_indexer import build_optional_llm
 from src.indexing.models import IndexedCodebase
 from src.retrieval.retriever import CodeRetriever
 from src.storage.metadata import MetadataStore
-from src.storage.qdrant_vector_store import QdrantCodeVectorStore
+from src.storage.supabase_vector_store import SupabaseCodeVectorStore
 from src.storage.lifecycle import get_repository_snapshot
 
 
@@ -51,7 +51,7 @@ def load_existing_codebase_agent(
     use_llm: bool,
     use_llm_router: bool = True,
 ) -> IndexedCodebase:
-    """Load an already indexed persistent repository from PostgreSQL and Qdrant."""
+    """Load an already indexed persistent repository from Supabase/PostgreSQL."""
     repo = get_repository_snapshot(repo_id)
 
     if repo is None:
@@ -84,7 +84,7 @@ def load_existing_codebase_agent(
     indexed_chunks = metadata_store.load_chunks(repo.repo_id)
     json_count = _count_distinct_chunk_files_by_source_type(indexed_chunks, "json")
     text_count = _count_distinct_chunk_files_by_source_type(indexed_chunks, "text")
-    vector_store = QdrantCodeVectorStore(repo_id=repo.repo_id)
+    vector_store = SupabaseCodeVectorStore(repo_id=repo.repo_id)
     retriever = CodeRetriever(
         vector_store=vector_store,
         indexed_chunks=indexed_chunks,

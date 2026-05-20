@@ -30,7 +30,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Clean up expired temporary repositories from PostgreSQL, "
-            "Qdrant, and runtime folders."
+            "pgvector embeddings, and runtime folders."
         )
     )
 

@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 @dataclass
 class TextChunk:
     """
-    Generic chunk object compatible with QdrantVectorStore and MetadataStore.
+    Generic chunk object compatible with vector stores and MetadataStore.
     """
     chunk_id: str
     text: str

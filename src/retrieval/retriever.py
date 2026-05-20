@@ -109,10 +109,8 @@ def _get_item_value(
 def _build_item_metadata(item: Any) -> Dict[str, Any]:
     """Build normalized metadata for downstream tools.
 
-    Supports:
-    - Qdrant dict results
-    - CodeChunk dataclass objects
-    - DB-loaded chunk dicts
+    Supports vector-store dict results, CodeChunk dataclass objects, and
+    DB-loaded chunk dicts.
     """
     metadata = _get_raw_metadata(item)
 
@@ -157,7 +155,7 @@ class CodeRetriever:
     """RRF retriever.
 
     Candidate sources:
-    - Qdrant vector search
+    - Supabase/Postgres pgvector search
     - full-repository BM25 search over indexed chunks
     - symbol metadata search
     - documentation search for documentation queries

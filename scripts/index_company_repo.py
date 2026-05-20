@@ -141,7 +141,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Index or re-index a configured company repository into "
-            "PostgreSQL and Qdrant."
+            "Supabase/Postgres metadata and pgvector embeddings."
         )
     )
 

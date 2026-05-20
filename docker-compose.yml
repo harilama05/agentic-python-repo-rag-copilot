@@ -1,7 +1,9 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: rag_postgres
+    profiles:
+      - db
     restart: unless-stopped
     environment:
       POSTGRES_USER: rag_user
@@ -11,17 +13,73 @@ services:
       - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  qdrant:
-    image: qdrant/qdrant:v1.12.4
-    container_name: rag_qdrant
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_api
+    profiles:
+      - app
     restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      LLM_BACKEND: ${LLM_BACKEND:-gemini}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8501}
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "8000:8000"
     volumes:
-      - qdrant_data:/qdrant/storage
+      - ./data/runtime:/app/data/runtime
+      - ./logs:/app/logs
+    # If you want to run a local pgvector/postgres instance, start the `postgres` service
+    # with the `db` profile: `docker compose --profile db up -d postgres`
+    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_streamlit
+    profiles:
+      - app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      LLM_BACKEND: ${LLM_BACKEND:-gemini}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8501}
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data/runtime:/app/data/runtime
+      - ./logs:/app/logs
+    # If you want to run a local pgvector/postgres instance, start the `postgres` service
+    # with the `db` profile: `docker compose --profile db up -d postgres`
+    command:
+      [
+        "python",
+        "-m",
+        "streamlit",
+        "run",
+        "app/streamlit_app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501"
+      ]
 
 volumes:
   postgres_data:
-  qdrant_data:

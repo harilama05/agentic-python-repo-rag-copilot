@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_EMBEDDING_DIMENSION = 384
 
 DEFAULT_TOP_K = 5
 DEFAULT_CANDIDATE_K = 20
@@ -36,6 +37,4 @@ MAX_GITHUB_REPO_MB = 100
 
 load_dotenv(override=True)
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
-QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "code_chunks")
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIMENSION))

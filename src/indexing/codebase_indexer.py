@@ -34,8 +34,8 @@ from src.parsing.ast_parser import parse_python_file
 from src.parsing.json_parser import parse_json_file
 from src.parsing.text_parser import parse_text_file
 from src.retrieval.retriever import CodeRetriever
-from src.storage.metadata_store import MetadataStore
-from src.storage.qdrant_vector_store import QdrantCodeVectorStore
+from src.storage.metadata import MetadataStore
+from src.storage.supabase_vector_store import SupabaseCodeVectorStore
 
 
 def make_collection_name(repo_path: str | Path) -> str:
@@ -205,7 +205,7 @@ def build_codebase_agent(
         )
 
     code_graph = build_code_graph(repo_path)
-    vector_store = QdrantCodeVectorStore(repo_id=repo_id)
+    vector_store = SupabaseCodeVectorStore(repo_id=repo_id)
 
     if reset_collection:
         vector_store.reset_collection()

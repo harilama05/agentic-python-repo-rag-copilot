@@ -1,4 +1,4 @@
-from src.storage.metadata_store import MetadataStore
+from src.storage.metadata import MetadataStore
 
 
 def main() -> None:

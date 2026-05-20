@@ -9,8 +9,8 @@ The current version includes:
 - Streamlit user-facing app
 - FastAPI backend API
 - Service layer for repository/session/chat workflows
-- PostgreSQL metadata storage
-- Qdrant vector storage
+- Supabase/Postgres metadata storage
+- Supabase pgvector storage
 - Python/Markdown/JSON/TXT indexing
 - RRF multi-source retrieval
 - Cross-Encoder accurate mode
@@ -38,7 +38,7 @@ Company repositories are indexed and re-indexed through internal scripts, not th
 - [Prerequisites](#prerequisites)
 - [Environment variables](#environment-variables)
 - [Local setup](#local-setup)
-- [Start PostgreSQL and Qdrant](#start-postgresql-and-qdrant)
+- [Configure Supabase](#configure-supabase)
 - [Initialize the database](#initialize-the-database)
 - [Index or update company repositories](#index-or-update-company-repositories)
 - [Run Streamlit app](#run-streamlit-app)
@@ -71,8 +71,8 @@ Implemented:
 - Markdown documentation indexing
 - JSON file indexing
 - TXT file indexing
-- PostgreSQL metadata/chunk/graph storage
-- Qdrant vector storage
+- Supabase/Postgres metadata/chunk/graph storage
+- Supabase pgvector storage
 - RRF-based multi-source retrieval
 - Fast retrieval mode using RRF
 - Accurate retrieval mode using RRF + Cross-Encoder reranking
@@ -84,7 +84,7 @@ Implemented:
 - Grounded LLM answer generation with fallback behavior
 - GitHub temporary repository ingestion
 - ZIP upload temporary repository ingestion
-- Company repository loading from PostgreSQL + Qdrant
+- Company repository loading from Supabase/Postgres + pgvector
 - Company repository index/re-index script
 - Temporary repository cleanup on repository switch or explicit cleanup
 - Expired temporary repository cleanup script
@@ -124,7 +124,7 @@ Agent tool execution
     ↓
 Retriever / Graph tools / File reader
     ↓
-PostgreSQL + Qdrant
+Supabase/Postgres + pgvector
     ↓
 Grounded answer generation
     ↓
@@ -144,9 +144,9 @@ Parse/chunk code, docs, config, and text files
     ↓
 Build AST code graph
     ↓
-Store metadata/chunks/graph in PostgreSQL
+Store metadata/chunks/graph in Supabase/Postgres
     ↓
-Store embeddings in Qdrant
+Store embeddings in Supabase pgvector
     ↓
 Ready for Streamlit/API users to load and ask questions
 ```
@@ -156,15 +156,15 @@ Company repository loading flow:
 ```text
 User/API loads Company Repo
     ↓
-Load repository metadata from PostgreSQL
+Load repository metadata from Supabase/Postgres
     ↓
-Load chunks from PostgreSQL
+Load chunks from Supabase/Postgres
     ↓
 Rebuild in-memory BM25 index
     ↓
-Load code graph from PostgreSQL
+Load code graph from Supabase/Postgres
     ↓
-Connect to Qdrant by repo_id
+Connect to pgvector embeddings by repo_id
     ↓
 Create retriever/tools/agent in memory
     ↓
@@ -197,7 +197,7 @@ Cleanup on switch, explicit cleanup, or expiration
 
 ### Company Repo
 
-Loads an already-indexed persistent company repository from PostgreSQL and Qdrant.
+Loads an already-indexed persistent company repository from Supabase/Postgres and pgvector.
 
 Company repositories use:
 
@@ -292,7 +292,7 @@ Fast mode runs multiple retrieval sources independently:
 ```text
 User query
     ↓
-Qdrant vector search
+Supabase pgvector search
 Full-repository BM25 search
 Symbol metadata search
 Documentation/text search for documentation queries
@@ -328,7 +328,7 @@ Scores such as BM25 score, RRF score, vector score, and Cross-Encoder score are 
 
 They are not stored permanently in PostgreSQL.
 
-PostgreSQL stores stable chunk text and metadata. Qdrant stores embeddings.
+Supabase/Postgres stores stable chunk text, metadata, graph data, and embeddings.
 
 ---
 
@@ -346,15 +346,15 @@ Graph RAG supports:
 Examples:
 
 ```text
-TaskService.create_task được gọi bởi ai?
+Who calls TaskService.create_task?
 ```
 
 ```text
-TaskService.create_task gọi những hàm nào?
+Which functions does TaskService.create_task call?
 ```
 
 ```text
-TaskService.create_task nếu xóa thì sẽ ảnh hưởng gì?
+What would be impacted if TaskService.create_task were removed?
 ```
 
 Graph results return citation metadata such as:
@@ -393,7 +393,7 @@ The backend uses an in-memory session store:
 session_id -> IndexedCodebase
 ```
 
-This is enough for local development and demo. If the backend restarts, in-memory sessions are lost. Company repositories can be loaded again from PostgreSQL + Qdrant.
+This is enough for local development and demo. If the backend restarts, in-memory sessions are lost. Company repositories can be loaded again from Supabase/Postgres.
 
 For production, Redis or another external session store would be better.
 
@@ -580,13 +580,13 @@ agentic-python-repo-rag-copilot/
 │   ├── init_db.py
 │   ├── inspect_db_tables.py
 │   ├── inspect_metadata_records.py
-│   ├── inspect_qdrant_records.py
+│   ├── inspect_supabase_vector_records.py
 │   ├── run_eval.py
 │   ├── test_github_ingestion.py
 │   ├── test_llm_router.py
 │   ├── test_load_code_graph_from_db.py
 │   ├── test_load_existing_repo.py
-│   ├── test_qdrant_vector_store.py
+│   ├── test_supabase_vector_store.py
 │   ├── test_storage_connections.py
 │   └── test_zip_ingestion.py
 │
@@ -627,8 +627,8 @@ Install these before running locally:
 
 - Python 3.10
 - Git
-- Docker Desktop
-- WSL2 on Windows
+- Supabase project with the `vector` extension enabled
+- Docker Desktop, optional for a local pgvector database
 - Visual Studio Code or another code editor
 
 ---
@@ -657,11 +657,10 @@ GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
 LLM_BACKEND=gemini
 
-DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
-
-QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=
-QDRANT_COLLECTION=code_chunks
+DATABASE_URL=postgresql+psycopg://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
+# Local Docker pgvector database:
+# DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
+EMBEDDING_DIMENSION=384
 
 CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
@@ -669,6 +668,31 @@ CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000
 Do not commit `.env`.
 
 Commit `.env.example` instead.
+
+The current runtime reads `GEMINI_API_KEY` and `DATABASE_URL` directly from `.env`. If you use Docker, the same file is mounted into the API and Streamlit containers.
+
+### Supabase database
+
+The application stores all persistent indexing data in Supabase/Postgres:
+
+```text
+repositories, chunks, code graph, and vector embeddings
+```
+
+Set `DATABASE_URL` to your Supabase PostgreSQL connection string. The app also accepts database URLs that start with `postgres://` or `postgresql://` and normalizes them to the installed `psycopg` driver.
+
+Example Supabase pooler URL:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
+```
+
+After changing `.env`, create the Supabase tables and verify the connection:
+
+```powershell
+python -m scripts.init_db
+python -m scripts.test_storage_connections
+```
 
 ---
 
@@ -704,23 +728,57 @@ python -m pip install -r requirements.txt
 
 ---
 
-## Start PostgreSQL and Qdrant
+## Configure Supabase
 
-Make sure Docker Desktop is running.
+Create a Supabase project, copy the Postgres connection string into `.env`, and enable the `vector` extension from the Supabase dashboard or by running:
 
-Then run:
-
-```powershell
-docker compose up -d
+```sql
+create extension if not exists vector;
 ```
 
-Check containers:
+For local development without Supabase, Docker can run a Postgres 16 database with pgvector enabled:
 
 ```powershell
-docker ps
+docker compose --profile db up -d postgres
 ```
 
-You should see PostgreSQL and Qdrant containers.
+Then use this local connection string in `.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
+```
+
+To run the API or Streamlit inside Docker, keep your `.env` file in the project root and run:
+
+```powershell
+docker compose --profile app up -d streamlit
+```
+
+Open the API at:
+
+```text
+http://localhost:8000
+```
+
+For Streamlit:
+
+```powershell
+docker compose --profile app up -d streamlit
+```
+
+Open Streamlit at:
+
+```text
+http://localhost:8501
+```
+
+If you want the Docker containers to use the local pgvector database, set `DATABASE_URL` in `.env` to:
+
+```env
+DATABASE_URL=postgresql+psycopg://rag_user:rag_password@postgres:5432/rag_db
+```
+
+If you want to use Supabase from Docker, keep the Supabase connection string in `DATABASE_URL` instead.
 
 ---
 
@@ -741,8 +799,8 @@ python -m scripts.test_storage_connections
 Expected output:
 
 ```text
-PostgreSQL connection OK: 1
-Qdrant connection OK
+Supabase PostgreSQL (.../postgres) connection OK: 1
+pgvector extension enabled: True
 ```
 
 ---
@@ -767,7 +825,7 @@ The same command is used for both first-time indexing and full re-indexing.
 
 When re-indexing, the script:
 
-1. Deletes old indexed data for the selected repository from PostgreSQL and Qdrant.
+1. Deletes old indexed data for the selected repository from Supabase/Postgres.
 2. Scans Python, Markdown, JSON, and TXT files.
 3. Rebuilds chunks.
 4. Rebuilds the code graph.
@@ -1088,10 +1146,10 @@ taskflow_api
 python -m scripts.inspect_metadata_records
 ```
 
-### Inspect Qdrant records
+### Inspect Supabase vector records
 
 ```powershell
-python -m scripts.inspect_qdrant_records
+python -m scripts.inspect_supabase_vector_records
 ```
 
 ### Test LLM router
@@ -1117,8 +1175,6 @@ data/runtime/
 project_tree.txt
 logs/
 *.log
-postgres_data/
-qdrant_data/
 ```
 
 Before committing, check:
@@ -1227,24 +1283,9 @@ git reset
 
 Add `.venv/` to `.gitignore`, then stage again.
 
-### Docker API error
+### Supabase connection failed
 
-Open Docker Desktop first, then run:
-
-```powershell
-docker ps
-docker compose up -d
-```
-
-### PostgreSQL or Qdrant connection refused
-
-Start containers:
-
-```powershell
-docker compose up -d
-```
-
-Then test:
+Check that `DATABASE_URL` points to your Supabase Postgres connection string, then test:
 
 ```powershell
 python -m scripts.test_storage_connections
@@ -1274,7 +1315,7 @@ Restart Streamlit/API after changing `.env`.
 
 Make sure:
 
-1. PostgreSQL container is running.
+1. `DATABASE_URL` points to Supabase.
 2. Database tables are initialized.
 3. Company repo has been indexed:
 
@@ -1326,8 +1367,7 @@ Temporary repo cleanup
 
 - Production-ready React frontend
 - Deployment to Render/Vercel
-- Neon PostgreSQL
-- Qdrant Cloud
+- Supabase/Postgres with pgvector
 - Background scheduled cleanup for expired temporary repositories
 - Incremental indexing for company repositories
 - Authentication and saved private user repositories
@@ -1340,14 +1380,13 @@ Temporary repo cleanup
 
 ## Deployment direction
 
-The current version is designed to run locally with Docker.
+The current version is designed to use Supabase/Postgres with pgvector for persistent storage.
 
 A production deployment can use:
 
 - Render for FastAPI backend
 - Vercel for frontend
-- Neon for PostgreSQL
-- Qdrant Cloud for vector database
+- Supabase/Postgres with pgvector
 - Redis or another external store for API sessions
 
 In production:

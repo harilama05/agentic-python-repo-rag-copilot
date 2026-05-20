@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.storage.qdrant_vector_store import QdrantCodeVectorStore
+from src.storage.supabase_vector_store import SupabaseCodeVectorStore
 
 
 @dataclass
@@ -11,9 +11,9 @@ class FakeChunk:
 
 
 def main() -> None:
-    repo_id = "test_qdrant_repo"
+    repo_id = "test_supabase_repo"
 
-    store = QdrantCodeVectorStore(repo_id=repo_id)
+    store = SupabaseCodeVectorStore(repo_id=repo_id)
     store.reset_collection()
 
     chunks = [
@@ -51,7 +51,7 @@ def main() -> None:
     )
 
     print("=" * 100)
-    print("Qdrant search results")
+    print("Supabase vector search results")
     print("=" * 100)
 
     for result in results:

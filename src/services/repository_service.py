@@ -256,7 +256,7 @@ def index_zip_repo(
         "Indexing temporary ZIP repository",
         extra={
             "session_id": session_id,
-            "filename": filename,
+            "zip_filename": filename,
             "file_size_bytes": len(zip_bytes),
             "retrieval_mode": retrieval_mode,
             "use_llm": use_llm,
@@ -309,7 +309,7 @@ def index_zip_repo(
             "Failed to index temporary ZIP repository",
             extra={
                 "session_id": session_id,
-                "filename": filename,
+                "zip_filename": filename,
                 "file_size_bytes": len(zip_bytes),
             },
         )

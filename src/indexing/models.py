@@ -7,7 +7,7 @@ from src.agent_core.agent import CodebaseAgent
 from src.agent_core.tools import CodebaseTools
 from src.graph.code_graph import CodeGraph
 from src.retrieval.retriever import CodeRetriever
-from src.storage.qdrant_vector_store import QdrantCodeVectorStore
+from src.storage.supabase_vector_store import SupabaseCodeVectorStore
 
 
 @dataclass
@@ -25,7 +25,7 @@ class IndexedCodebase:
     ignored_file_count: int
     chunk_count: int
     code_graph: CodeGraph
-    vector_store: QdrantCodeVectorStore
+    vector_store: SupabaseCodeVectorStore
     retriever: CodeRetriever
     tools: CodebaseTools
     agent: CodebaseAgent

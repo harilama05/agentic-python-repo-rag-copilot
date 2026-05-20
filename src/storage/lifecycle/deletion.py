@@ -5,46 +5,17 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from qdrant_client import QdrantClient
-from qdrant_client.http import models as qdrant_models
 from sqlalchemy import delete
 
 from src.core.config import RUNTIME_DIR
-from src.core.settings import QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL
-from src.db.models import Chunk, CodeEdge, CodeNode, Repository
+from src.db.models import Chunk, ChunkEmbedding, CodeEdge, CodeNode, Repository
 from src.db.session import get_db_session
 from src.storage.lifecycle.models import is_temporary_repository
 from src.storage.lifecycle.queries import get_repository_snapshot
 
-def delete_qdrant_points_for_repo(repo_id: str) -> None:
-    client = QdrantClient(
-        url=QDRANT_URL,
-        api_key=QDRANT_API_KEY or None,
-    )
-
-    collections = client.get_collections().collections
-    collection_names = {collection.name for collection in collections}
-
-    if QDRANT_COLLECTION not in collection_names:
-        return
-
-    client.delete(
-        collection_name=QDRANT_COLLECTION,
-        points_selector=qdrant_models.FilterSelector(
-            filter=qdrant_models.Filter(
-                must=[
-                    qdrant_models.FieldCondition(
-                        key="repo_id",
-                        match=qdrant_models.MatchValue(value=repo_id),
-                    )
-                ]
-            )
-        ),
-        wait=True,
-    )
-
 def delete_postgres_rows_for_repo(repo_id: str) -> None:
     with get_db_session() as session:
+        session.execute(delete(ChunkEmbedding).where(ChunkEmbedding.repo_id == repo_id))
         session.execute(delete(CodeEdge).where(CodeEdge.repo_id == repo_id))
         session.execute(delete(CodeNode).where(CodeNode.repo_id == repo_id))
         session.execute(delete(Chunk).where(Chunk.repo_id == repo_id))
@@ -124,7 +95,6 @@ def delete_repository(
     local_path = repo.local_path
     if only_if_temporary and not is_temporary_repository(source_type, is_persistent):
         return False
-    delete_qdrant_points_for_repo(repo_id)
     delete_postgres_rows_for_repo(repo_id)
     if delete_runtime_files:
         delete_runtime_files_for_repo(

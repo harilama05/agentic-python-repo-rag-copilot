@@ -16,6 +16,11 @@ def get_database_url() -> str:
     if not database_url:
         raise ValueError("DATABASE_URL is not set")
 
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     return database_url
 
 

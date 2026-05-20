@@ -12,7 +12,7 @@ class Chunk(Base):
     """
     Metadata and text for one indexed chunk.
 
-    Embeddings are stored in Qdrant.
+    Embeddings are stored in Supabase/Postgres pgvector.
     Chunk metadata/text is stored here for source display, debugging,
     and mapping retrieval results back to code locations.
     """

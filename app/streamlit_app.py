@@ -82,28 +82,36 @@ with st.sidebar:
     selected_existing_repo_id = None
 
     if repo_mode == "Company Repo":
-        persistent_repos = list_company_repos()
+        try:
+            persistent_repos = list_company_repos()
 
-        if not persistent_repos:
+            if not persistent_repos:
+                st.warning(
+                    "No indexed company repositories found. "
+                    "Run the company repo indexing script first."
+                )
+            else:
+                repo_options = {
+                    f"{repo.repo_name} | {repo.repo_id} | chunks={repo.chunk_count}": repo.repo_id
+                    for repo in persistent_repos
+                }
+
+                selected_label = st.selectbox(
+                    "Company repository",
+                    options=list(repo_options.keys()),
+                )
+
+                selected_existing_repo_id = repo_options[selected_label]
+
+        except Exception as exc:
             st.warning(
-                "No indexed company repositories found. "
-                "Run the company repo indexing script first."
+                "Could not load company repositories from the database. "
+                "You can still use GitHub URL or ZIP Upload."
             )
-        else:
-            repo_options = {
-                f"{repo.repo_name} | {repo.repo_id} | chunks={repo.chunk_count}": repo.repo_id
-                for repo in persistent_repos
-            }
-
-            selected_label = st.selectbox(
-                "Company repository",
-                options=list(repo_options.keys()),
-            )
-
-            selected_existing_repo_id = repo_options[selected_label]
+            st.caption(str(exc))
 
         st.caption(
-            "Company repositories are loaded from PostgreSQL + Qdrant. "
+            "Company repositories are loaded from Supabase/Postgres + pgvector. "
             "They are indexed or re-indexed with an internal script, not from this UI."
         )
 
