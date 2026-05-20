@@ -36,7 +36,7 @@ from src.parsing.ast_parser import parse_python_file
 from src.retrieval.retriever import CodeRetriever
 from src.ingestion.scanner import scan_python_files
 from src.core.settings import RETRIEVAL_MODE_FAST
-from src.storage.metadata_store import MetadataStore
+from src.storage.metadata import MetadataStore
 from src.storage.qdrant_vector_store import QdrantCodeVectorStore
 
 

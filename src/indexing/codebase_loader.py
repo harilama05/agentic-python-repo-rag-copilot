@@ -14,9 +14,9 @@ from src.generation.answer_generator import GroundedAnswerGenerator
 from src.indexing.codebase_indexer import build_optional_llm
 from src.indexing.models import IndexedCodebase
 from src.retrieval.retriever import CodeRetriever
-from src.storage.metadata_store import MetadataStore
+from src.storage.metadata import MetadataStore
 from src.storage.qdrant_vector_store import QdrantCodeVectorStore
-from src.storage.repository_lifecycle import get_repository_snapshot
+from src.storage.lifecycle import get_repository_snapshot
 
 
 def _count_distinct_chunk_files_by_source_type(

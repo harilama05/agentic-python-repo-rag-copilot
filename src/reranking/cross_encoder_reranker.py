@@ -17,8 +17,15 @@ class CrossEncoderReranker:
     Scores each (query, chunk_text) pair and sorts by the predicted relevance.
     """
 
-    def __init__(self, model_name: str | None = None):
+    def __init__(
+        self,
+        model_name: str | None = None,
+        text_key: str = "text",
+        batch_size: int = 32,
+    ):
         self.model_name = model_name or CROSS_ENCODER_MODEL
+        self.text_key = text_key
+        self.batch_size = batch_size
         self.model: CrossEncoder | None = None
 
     def _get_model(self) -> CrossEncoder:
@@ -39,11 +46,11 @@ class CrossEncoderReranker:
         pairs = []
 
         for result in results:
-            text = result.get("text") or ""
+            text = result.get(self.text_key) or ""
             pairs.append((query, text))
 
         model = self._get_model()
-        scores = model.predict(pairs)
+        scores = model.predict(pairs, batch_size=self.batch_size)
 
         reranked_results = []
 

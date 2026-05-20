@@ -13,7 +13,7 @@ from src.ingestion.github_ingestion import clone_github_repo
 from src.ingestion.zip_ingestion import ingest_zip_bytes
 from src.observability.logger import get_logger
 from src.services.session_store import SessionStore, get_default_session_store
-from src.storage.repository_lifecycle import (
+from src.storage.lifecycle import (
     cleanup_temporary_repository,
     list_persistent_repositories,
 )

@@ -121,11 +121,13 @@ def _find_repo_root(extract_dir: Path) -> Path:
 def _validate_python_repo(repo_root: Path) -> None:
     python_files = list(repo_root.rglob("*.py"))
     markdown_files = list(repo_root.rglob("*.md"))
+    json_files = list(repo_root.rglob("*.json"))
+    text_files = list(repo_root.rglob("*.txt"))
 
-    if not python_files and not markdown_files:
+    if not python_files and not markdown_files and not json_files and not text_files:
         raise ValueError(
-            "The uploaded ZIP does not look like a Python repository. "
-            "No .py or .md files were found."
+            "The uploaded ZIP does not look like a supported repository. "
+            "No .py, .md, .json, or .txt files were found."
         )
 
 
