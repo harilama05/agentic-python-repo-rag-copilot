@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 
+def _read_json_text_safely(path: Path) -> str:
+    """Read JSON-like text and remove NUL bytes that PostgreSQL cannot store."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return text.replace("\x00", "")
+
+
 def parse_json_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, Any]:
     """
     Parse a JSON file and return normalized text + metadata.
@@ -21,7 +27,7 @@ def parse_json_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, A
 
     relative_path = str(path.relative_to(root)).replace("\\", "/")
 
-    raw_text = path.read_text(encoding="utf-8", errors="ignore")
+    raw_text = _read_json_text_safely(path)
 
     try:
         data = json.loads(raw_text)
@@ -31,7 +37,7 @@ def parse_json_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, A
     except Exception as exc:
         text = raw_text
         valid_json = False
-        parse_error = str(exc)
+        parse_error = str(exc).replace("\x00", "")
 
     return {
         "text": text,

@@ -1,6 +1,6 @@
 import argparse
 
-from src.storage.repository_lifecycle import (
+from src.storage.lifecycle import (
     cleanup_expired_temporary_repositories,
     list_expired_temporary_repositories,
 )

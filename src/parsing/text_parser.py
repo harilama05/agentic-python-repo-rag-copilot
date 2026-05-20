@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 
+def _read_text_safely(path: Path) -> str:
+    """Read text and remove NUL bytes that PostgreSQL TEXT cannot store."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return text.replace("\x00", "")
+
+
 def parse_text_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, Any]:
     """
     Parse a plain text file.
@@ -17,7 +23,7 @@ def parse_text_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, A
 
     relative_path = str(path.relative_to(root)).replace("\\", "/")
 
-    text = path.read_text(encoding="utf-8", errors="ignore")
+    text = _read_text_safely(path)
 
     return {
         "text": text,

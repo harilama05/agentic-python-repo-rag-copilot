@@ -9,6 +9,8 @@ from src.storage.metadata.utils import (
     get_chunk_text,
     get_metadata_value,
     make_stable_chunk_id,
+    sanitize_postgres_text,
+    sanitize_postgres_text_or_empty,
 )
 
 
@@ -28,7 +30,7 @@ class ChunkStoreMixin:
 
             for chunk in chunks:
                 metadata = get_chunk_metadata(chunk)
-                text = get_chunk_text(chunk)
+                text = sanitize_postgres_text_or_empty(get_chunk_text(chunk))
 
                 relative_path = get_metadata_value(
                     metadata,
@@ -37,6 +39,7 @@ class ChunkStoreMixin:
                     "path",
                     default="",
                 )
+                relative_path = sanitize_postgres_text_or_empty(relative_path)
 
                 start_line = get_metadata_value(
                     metadata,
@@ -55,7 +58,7 @@ class ChunkStoreMixin:
                     or metadata.get("chunk_id")
                     or make_stable_chunk_id(
                         repo_id=repo_id,
-                        relative_path=str(relative_path),
+                        relative_path=relative_path,
                         start_line=start_line,
                         end_line=end_line,
                         text=text,
@@ -94,16 +97,16 @@ class ChunkStoreMixin:
 
                 chunk_rows.append(
                     Chunk(
-                        chunk_id=str(chunk_id),
-                        repo_id=repo_id,
-                        source_type=source_type,
-                        relative_path=str(relative_path),
+                        chunk_id=sanitize_postgres_text_or_empty(chunk_id),
+                        repo_id=sanitize_postgres_text_or_empty(repo_id),
+                        source_type=sanitize_postgres_text(source_type),
+                        relative_path=relative_path,
                         start_line=start_line,
                         end_line=end_line,
-                        symbol_name=symbol_name,
-                        qualified_name=qualified_name,
-                        symbol_type=symbol_type,
-                        heading=heading,
+                        symbol_name=sanitize_postgres_text(symbol_name),
+                        qualified_name=sanitize_postgres_text(qualified_name),
+                        symbol_type=sanitize_postgres_text(symbol_type),
+                        heading=sanitize_postgres_text(heading),
                         text=text,
                     )
                 )
@@ -121,42 +124,47 @@ class ChunkStoreMixin:
             chunks: list[dict[str, Any]] = []
 
             for row in rows:
+                row_text = sanitize_postgres_text_or_empty(row.text)
+                relative_path = sanitize_postgres_text_or_empty(row.relative_path)
+                qualified_name = sanitize_postgres_text(row.qualified_name)
+                symbol_name = sanitize_postgres_text(row.symbol_name)
+
                 metadata = {
-                    "chunk_id": row.chunk_id,
-                    "repo_id": row.repo_id,
-                    "source_type": row.source_type,
-                    "relative_path": row.relative_path,
-                    "file_path": row.relative_path,
+                    "chunk_id": sanitize_postgres_text_or_empty(row.chunk_id),
+                    "repo_id": sanitize_postgres_text_or_empty(row.repo_id),
+                    "source_type": sanitize_postgres_text(row.source_type),
+                    "relative_path": relative_path,
+                    "file_path": relative_path,
                     "start_line": row.start_line,
                     "end_line": row.end_line,
                     "line_start": row.start_line,
                     "line_end": row.end_line,
-                    "symbol_name": row.symbol_name,
-                    "qualified_name": row.qualified_name,
-                    "symbol": row.qualified_name or row.symbol_name,
-                    "symbol_type": row.symbol_type,
-                    "heading": row.heading,
+                    "symbol_name": symbol_name,
+                    "qualified_name": qualified_name,
+                    "symbol": qualified_name or symbol_name,
+                    "symbol_type": sanitize_postgres_text(row.symbol_type),
+                    "heading": sanitize_postgres_text(row.heading),
                 }
 
                 chunks.append(
                     {
-                        "chunk_id": row.chunk_id,
-                        "repo_id": row.repo_id,
-                        "source_type": row.source_type,
-                        "relative_path": row.relative_path,
-                        "file_path": row.relative_path,
+                        "chunk_id": metadata["chunk_id"],
+                        "repo_id": metadata["repo_id"],
+                        "source_type": metadata["source_type"],
+                        "relative_path": relative_path,
+                        "file_path": relative_path,
                         "start_line": row.start_line,
                         "end_line": row.end_line,
                         "line_start": row.start_line,
                         "line_end": row.end_line,
-                        "symbol_name": row.symbol_name,
-                        "qualified_name": row.qualified_name,
-                        "symbol": row.qualified_name or row.symbol_name,
-                        "symbol_type": row.symbol_type,
-                        "heading": row.heading,
-                        "text": row.text,
-                        "content": row.text,
-                        "code": row.text,
+                        "symbol_name": symbol_name,
+                        "qualified_name": qualified_name,
+                        "symbol": qualified_name or symbol_name,
+                        "symbol_type": metadata["symbol_type"],
+                        "heading": metadata["heading"],
+                        "text": row_text,
+                        "content": row_text,
+                        "code": row_text,
                         "metadata": metadata,
                     }
                 )

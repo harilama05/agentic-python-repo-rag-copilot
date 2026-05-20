@@ -39,3 +39,16 @@ def get_metadata_value(
         if value is not None:
             return value
     return default
+
+
+def sanitize_postgres_text(value: Any) -> Any:
+    """Remove NUL bytes because PostgreSQL TEXT/VARCHAR fields cannot store them."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    return value
+
+def sanitize_postgres_text_or_empty(value: Any) -> str:
+    """Return a NUL-free string, using an empty string for None."""
+    if value is None:
+        return ""
+    return str(value).replace("\x00", "")

@@ -6,7 +6,7 @@ from src.services.company_repos import get_company_repo, get_company_repo_option
 from src.core.constants import REPO_SOURCE_COMPANY
 from src.indexing.codebase_indexer import build_codebase_agent
 from src.core.settings import RETRIEVAL_MODE_FAST
-from src.storage.repository_lifecycle import delete_repository
+from src.storage.lifecycle import delete_repository
 
 
 @dataclass
@@ -108,7 +108,7 @@ def index_company_repo(identifier: str) -> None:
     indexed = build_codebase_agent(
         repo_path=repo_path,
         collection_name=repo_id,
-        reset_collection=False,
+        reset_collection=True,
         use_llm=True,
         retrieval_mode=RETRIEVAL_MODE_FAST,
         use_llm_router=True,

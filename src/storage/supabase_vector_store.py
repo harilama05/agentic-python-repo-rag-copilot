@@ -11,6 +11,22 @@ from src.db.session import get_db_session
 from src.embeddings.embedding_model import LocalEmbeddingModel
 
 
+def sanitize_postgres_text(value: Any) -> Any:
+    """Remove NUL bytes because PostgreSQL TEXT/VARCHAR fields cannot store them."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+
+    return value
+
+
+def sanitize_postgres_text_or_empty(value: Any) -> str:
+    """Return a NUL-free string, using an empty string for None."""
+    if value is None:
+        return ""
+
+    return str(value).replace("\x00", "")
+
+
 def make_stable_chunk_id(
     repo_id: str,
     relative_path: str,
@@ -18,6 +34,8 @@ def make_stable_chunk_id(
     end_line: int | None,
     chunk_text: str,
 ) -> str:
+    chunk_text = sanitize_postgres_text_or_empty(chunk_text)
+    relative_path = sanitize_postgres_text_or_empty(relative_path)
     raw = f"{repo_id}:{relative_path}:{start_line}:{end_line}:{chunk_text}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
@@ -27,12 +45,14 @@ def make_point_id(chunk_id: str) -> str:
 
 
 def get_chunk_text(chunk: Any) -> str:
-    return (
+    text = (
         getattr(chunk, "text", None)
         or getattr(chunk, "content", None)
         or getattr(chunk, "code", None)
         or ""
     )
+
+    return sanitize_postgres_text_or_empty(text)
 
 
 def get_chunk_metadata(chunk: Any) -> dict[str, Any]:
@@ -124,7 +144,7 @@ class SupabaseCodeVectorStore:
         with get_db_session() as session:
             session.execute(
                 text("DELETE FROM chunk_embeddings WHERE repo_id = :repo_id"),
-                {"repo_id": self.repo_id},
+                {"repo_id": sanitize_postgres_text_or_empty(self.repo_id)},
             )
 
     def add_chunks(self, chunks: Iterable[Any], batch_size: int = 64) -> None:
@@ -152,6 +172,8 @@ class SupabaseCodeVectorStore:
                 "path",
                 default="",
             )
+            relative_path = sanitize_postgres_text_or_empty(relative_path)
+
             start_line = get_metadata_value(metadata, "start_line", "line_start")
             end_line = get_metadata_value(metadata, "end_line", "line_end")
             chunk_id = (
@@ -159,31 +181,42 @@ class SupabaseCodeVectorStore:
                 or metadata.get("chunk_id")
                 or make_stable_chunk_id(
                     repo_id=self.repo_id,
-                    relative_path=str(relative_path),
+                    relative_path=relative_path,
                     start_line=start_line,
                     end_line=end_line,
                     chunk_text=chunk_text,
                 )
             )
+            chunk_id = sanitize_postgres_text_or_empty(chunk_id)
 
             rows.append(
                 {
-                    "chunk_id": str(chunk_id),
-                    "repo_id": self.repo_id,
-                    "point_id": make_point_id(str(chunk_id)),
+                    "chunk_id": chunk_id,
+                    "repo_id": sanitize_postgres_text_or_empty(self.repo_id),
+                    "point_id": make_point_id(chunk_id),
                     "text": chunk_text,
-                    "source_type": get_metadata_value(metadata, "source_type", "type"),
-                    "relative_path": str(relative_path),
+                    "source_type": sanitize_postgres_text(
+                        get_metadata_value(metadata, "source_type", "type")
+                    ),
+                    "relative_path": relative_path,
                     "start_line": start_line,
                     "end_line": end_line,
-                    "symbol_name": get_metadata_value(metadata, "symbol_name", "name"),
-                    "qualified_name": get_metadata_value(
-                        metadata,
-                        "qualified_name",
-                        "symbol",
+                    "symbol_name": sanitize_postgres_text(
+                        get_metadata_value(metadata, "symbol_name", "name")
                     ),
-                    "symbol_type": get_metadata_value(metadata, "symbol_type", "type"),
-                    "heading": get_metadata_value(metadata, "heading", "title"),
+                    "qualified_name": sanitize_postgres_text(
+                        get_metadata_value(
+                            metadata,
+                            "qualified_name",
+                            "symbol",
+                        )
+                    ),
+                    "symbol_type": sanitize_postgres_text(
+                        get_metadata_value(metadata, "symbol_type", "type")
+                    ),
+                    "heading": sanitize_postgres_text(
+                        get_metadata_value(metadata, "heading", "title")
+                    ),
                     "embedding": format_vector(embedding),
                 }
             )
@@ -273,7 +306,7 @@ class SupabaseCodeVectorStore:
                     """
                 ),
                 {
-                    "repo_id": self.repo_id,
+                    "repo_id": sanitize_postgres_text_or_empty(self.repo_id),
                     "query_vector": query_vector,
                     "top_k": top_k,
                 },
@@ -284,41 +317,47 @@ class SupabaseCodeVectorStore:
         for row in rows:
             distance = float(row["distance"] or 0.0)
             score = 1.0 - distance
+            text_value = sanitize_postgres_text_or_empty(row["text"])
+            relative_path = sanitize_postgres_text_or_empty(row["relative_path"])
+
             payload = {
-                "repo_id": row["repo_id"],
-                "chunk_id": row["chunk_id"],
-                "text": row["text"],
-                "source_type": row["source_type"],
-                "relative_path": row["relative_path"],
+                "repo_id": sanitize_postgres_text_or_empty(row["repo_id"]),
+                "chunk_id": sanitize_postgres_text_or_empty(row["chunk_id"]),
+                "text": text_value,
+                "source_type": sanitize_postgres_text(row["source_type"]),
+                "relative_path": relative_path,
                 "start_line": row["start_line"],
                 "end_line": row["end_line"],
-                "symbol_name": row["symbol_name"],
-                "qualified_name": row["qualified_name"],
-                "symbol_type": row["symbol_type"],
-                "heading": row["heading"],
+                "symbol_name": sanitize_postgres_text(row["symbol_name"]),
+                "qualified_name": sanitize_postgres_text(row["qualified_name"]),
+                "symbol_type": sanitize_postgres_text(row["symbol_type"]),
+                "heading": sanitize_postgres_text(row["heading"]),
             }
+
+            qualified_name = payload["qualified_name"]
+            symbol_name = payload["symbol_name"]
 
             results.append(
                 {
                     "id": str(row["point_id"]),
                     "score": score,
                     "vector_score": score,
-                    "text": row["text"],
-                    "content": row["text"],
-                    "code": row["text"],
-                    "chunk_id": row["chunk_id"],
-                    "source_type": row["source_type"],
-                    "relative_path": row["relative_path"],
-                    "file_path": row["relative_path"],
+                    "text": text_value,
+                    "content": text_value,
+                    "code": text_value,
+                    "chunk_id": payload["chunk_id"],
+                    "source_type": payload["source_type"],
+                    "relative_path": relative_path,
+                    "file_path": relative_path,
                     "start_line": row["start_line"],
                     "end_line": row["end_line"],
                     "line_start": row["start_line"],
                     "line_end": row["end_line"],
-                    "symbol_name": row["symbol_name"],
-                    "qualified_name": row["qualified_name"],
-                    "symbol": row["qualified_name"] or row["symbol_name"],
-                    "symbol_type": row["symbol_type"],
-                    "heading": row["heading"],
+                    "symbol_name": symbol_name,
+                    "qualified_name": qualified_name,
+                    "symbol": qualified_name or symbol_name,
+                    "symbol_type": payload["symbol_type"],
+                    "heading": payload["heading"],
                     "metadata": payload,
                 }
             )
@@ -337,12 +376,13 @@ class SupabaseCodeVectorStore:
             query_embedding = query
 
         if query_text is None and isinstance(query, str):
-            query_text = query
+            query_text = sanitize_postgres_text_or_empty(query)
 
         if query_embedding is None:
             if not query_text:
                 raise ValueError("Either query text or query embedding must be provided")
 
+            query_text = sanitize_postgres_text_or_empty(query_text)
             query_embedding = self.embedding_model.embed_query(query_text)
 
         return self.search_by_vector(
@@ -352,6 +392,7 @@ class SupabaseCodeVectorStore:
 
     def search_text(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
         """Search chunks by query text within the current repository."""
+        query = sanitize_postgres_text_or_empty(query)
         query_embedding = self.embedding_model.embed_query(query)
 
         return self.search_by_vector(

@@ -9,22 +9,16 @@ from pathlib import Path
 from typing import List, Optional
 
 from src.chunking.code_chunker import CodeChunk
-from src.core.constants import DOC_EXTENSIONS, IGNORE_DIRS, SOURCE_TYPE_DOC, SYMBOL_TYPE_DOCUMENTATION
+from src.core.constants import (
+    DOC_EXTENSIONS,
+    SOURCE_TYPE_DOC,
+    SYMBOL_TYPE_DOCUMENTATION,
+)
 from src.ingestion.scanner import (
     is_within_index_size_limit,
     should_ignore_file_name,
     should_ignore_path,
 )
-
-def should_ignore_path(path: Path) -> bool:
-    """Return True if a path lives under an ignored directory."""
-    parts = set(path.parts)
-
-    for ignored_dir in IGNORE_DIRS:
-        if ignored_dir in parts:
-            return True
-
-    return False
 
 
 def scan_markdown_files(repo_path: str | Path) -> list[Path]:
