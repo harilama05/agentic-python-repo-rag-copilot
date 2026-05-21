@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RAG Codebase Assistant</title>
+    <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <!-- LEFT PANEL: USER ONLY -->
+        <aside class="left-panel">
+            <div class="brand">
+                <div class="brand-logo">
+                    <img src="./logo_chatbot.jpg" alt="logo" />
+                </div>
+
+                <div>
+                    <h1>Codebase Assistant</h1>
+                    <p>Hãy chat với source code</p>
+                </div>
+            </div>
+
+            <section id="userControls" class="control-section">
+                <div class="section-header">
+                    <h2>Workspace</h2>
+                    <p>Chọn repo có sẵn hoặc upload repo mới để hỏi đáp.</p>
+                </div>
+
+                <div class="card">
+                    <h3>Company Repository</h3>
+
+                    <select id="companyRepoSelect">
+                        <option value="">Đang tải ...</option>
+                    </select>
+                </div>
+
+                <div class="card hidden" id="repoStatsCard">
+                    <h3>Repository Stats</h3>
+                    <div id="selectedRepoStats" class="mini-stats" style="margin-top: 0;"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Upload temporary repository</h3>
+
+                    <select id="temporaryRepoType">
+                        <option value="github">GitHub public URL</option>
+                        <option value="zip">Upload .zip repo</option>
+                    </select>
+
+                    <div id="githubTempBox">
+                        <input id="tempGithubUrl" type="text" placeholder="https://github.com/user/repo" />
+
+                        <button id="indexTempGithubBtn" class="primary-button" type="button">
+                            Index GitHub 
+                        </button>
+                    </div>
+
+                    <div id="zipTempBox" class="hidden">
+                        <input id="tempZipFile" type="file" accept=".zip" />
+
+                        <button id="uploadTempZipBtn" class="primary-button" type="button">
+                            Upload & Index tạm thời
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Retrieval mode</h3>
+
+                    <label class="radio-row">
+                        <input type="radio" name="retrievalMode" value="fast" checked />
+
+                        <span>
+                            <strong>Fast</strong>
+                            <small>Retrieval nhanh, ít tốn tài nguyên.</small>
+                        </span>
+                    </label>
+
+                    <label class="radio-row">
+                        <input type="radio" name="retrievalMode" value="accurate" />
+
+                        <span>
+                            <strong>Accurate</strong>
+                            <small>Retieval sâu bằng Graph RAG + Cross-Encoder .</small>
+                        </span>
+                    </label>
+                </div>
+
+                <div id="userStatusBox" class="status-box hidden"></div>
+            </section>
+        </aside>
+
+        <!-- RIGHT CHAT PANEL -->
+        <main class="chat-panel">
+            <header class="chat-header">
+                <div class="chat-header-main">
+                    <div class="chat-title-copy">
+                        <h2 id="chatTitle">Chọn repo có sẵn hoặc upload mới</h2>
+
+                        <p>
+                            Mode:
+                            <strong id="currentRetrievalMode">fast</strong>
+                            ·
+                            <span id="retrievalDescription">Graph RAG + Hybrid retrieval</span>
+                        </p>
+                    </div>
+
+                    <div id="headerStatusBox" class="header-status hidden"></div>
+                </div>
+
+                <label class="debug-toggle">
+                    <input id="debugToggle" type="checkbox" checked />
+                    Debug
+                </label>
+            </header>
+
+            <div id="messages" class="messages">
+                <div class="message-row assistant-row">
+                    <div class="avatar"><img src="./logo_chatbot.jpg" alt="avatar" /></div>
+
+                    <div class="message-body">
+                        <div class="bubble assistant-bubble">
+                            Xin chào! Hãy chọn company repo hoặc upload repo để đặt câu hỏi.
+                        </div>
+
+                        <div class="message-time">Bây giờ</div>
+                    </div>
+                </div>
+            </div>
+
+            <form id="chatForm" class="chat-input">
+                <input id="chatInput" type="text" placeholder="Ask about a function, file, architecture, or bug in this repository..."
+                    autocomplete="off" />
+
+                <button id="sendChatBtn" type="submit">
+                    Gửi
+                </button>
+            </form>
+        </main>
+    </div>
+
+    <script src="./script.js"></script>
+</body>
+
+</html>

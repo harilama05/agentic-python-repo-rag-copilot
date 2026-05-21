@@ -102,6 +102,7 @@ class ChatResponse(BaseModel):
     tools_used: List[str]
     sources: List[Dict[str, Any]]
     raw_results: Dict[str, Any]
+    warnings: List[str] = []
 
 
 class TemporaryRepoCleanupResponse(BaseModel):

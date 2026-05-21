@@ -161,6 +161,8 @@ class CodebaseAgent:
         elif query_type == QUERY_TYPE_DOCUMENTATION:
             response = self._answer_documentation_query(effective_question)
             response.question = question
+        elif query_type == "count_query":
+            response = self._answer_count_query(question, symbol)
         else:
             response = self._answer_search_query(effective_question)
             response.question = question
@@ -387,6 +389,8 @@ class CodebaseAgent:
                 }
             )
 
+        source_excerpts = self._build_source_excerpts(sources)
+
         return AgentResponse(
             question=question,
             query_type=QUERY_TYPE_REFERENCE,
@@ -396,6 +400,7 @@ class CodebaseAgent:
             raw_results={
                 "references": references,
                 "definitions": definitions,
+                "source_excerpts": source_excerpts,
             },
         )
 
@@ -438,6 +443,8 @@ class CodebaseAgent:
                     }
                 )
 
+            source_excerpts = self._build_source_excerpts(sources)
+
             return AgentResponse(
                 question=question,
                 query_type=QUERY_TYPE_LOCATION,
@@ -447,6 +454,7 @@ class CodebaseAgent:
                 raw_results={
                     "symbol_results": symbol_results,
                     "search_results": search_results,
+                    "source_excerpts": source_excerpts,
                 },
             )
 
@@ -470,13 +478,18 @@ class CodebaseAgent:
                 }
             )
 
+        source_excerpts = self._build_source_excerpts(sources)
+
         return AgentResponse(
             question=question,
             query_type=QUERY_TYPE_LOCATION,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
-            raw_results={"symbol_results": symbol_results},
+            raw_results={
+                "symbol_results": symbol_results,
+                "source_excerpts": source_excerpts,
+            },
         )
 
     def _answer_explanation_query(self, question: str, symbol: str) -> AgentResponse:
@@ -579,13 +592,18 @@ class CodebaseAgent:
                 }
             )
 
+        source_excerpts = self._build_source_excerpts(sources)
+
         return AgentResponse(
             question=question,
             query_type=QUERY_TYPE_SEARCH,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
-            raw_results={"search_results": search_results},
+            raw_results={
+                "search_results": search_results,
+                "source_excerpts": source_excerpts,
+            },
         )
 
     def _answer_documentation_query(self, question: str) -> AgentResponse:
@@ -645,13 +663,48 @@ class CodebaseAgent:
                 }
             )
 
+        source_excerpts = self._build_source_excerpts(sources)
+
         return AgentResponse(
             question=question,
             query_type=QUERY_TYPE_DOCUMENTATION,
             answer="\n".join(lines),
             tools_used=tools_used,
             sources=sources,
-            raw_results={"search_results": search_results},
+            raw_results={
+                "search_results": search_results,
+                "source_excerpts": source_excerpts,
+            },
+        )
+
+    def _answer_count_query(self, question: str, symbol: str | None) -> AgentResponse:
+        """Answer queries asking to count symbols (functions, classes, etc.)"""
+        symbol_type = symbol if symbol in ("function", "class", "method") else "all"
+        tools_used = [f'count_symbols("{symbol_type}")']
+        
+        result = self.tools.count_symbols(symbol_type)
+        
+        if symbol_type == "all":
+            answer = f"🔍 Đã tìm thấy tổng cộng **{result['count']}** symbols trong codebase:\n"
+            for stype, count in result.get("counts_by_type", {}).items():
+                answer += f"\n- {count} {stype}s"
+        else:
+            answer = f"🔍 Đã tìm thấy tổng cộng **{result['count']}** {symbol_type}s trong codebase."
+            
+        sources = result.get("items", [])
+        
+        # We don't want to build source_excerpts for hundreds of functions,
+        # it would blow up the context window. LLM doesn't need excerpts to report a count.
+        
+        return AgentResponse(
+            question=question,
+            query_type="count_query",
+            answer=answer,
+            tools_used=tools_used,
+            sources=sources,
+            raw_results={
+                "count_result": result,
+            },
         )
 
     def _resolve_symbol_for_graph_query(

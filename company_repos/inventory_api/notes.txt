@@ -1,0 +1,2 @@
+Inventory API supports product creation, stock updates, and restock checks.
+This file is used to test plain text indexing for the second company repository.

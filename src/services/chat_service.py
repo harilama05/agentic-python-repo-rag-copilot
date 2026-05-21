@@ -51,6 +51,9 @@ def answer_question(
         response = indexed_codebase.agent.answer(cleaned_question)
         store.append_chat_response(session_id, response)
 
+        source_excerpts = response.raw_results.get("source_excerpts", [])
+        sub_responses = response.raw_results.get("sub_responses", [])
+
         logger.info(
             "Question answered",
             extra={
@@ -59,9 +62,13 @@ def answer_question(
                 "query_type": response.query_type,
                 "source_count": len(response.sources),
                 "tool_count": len(response.tools_used),
+                "source_excerpt_count": len(source_excerpts) if isinstance(source_excerpts, list) else 0,
+                "sub_response_count": len(sub_responses) if isinstance(sub_responses, list) else 0,
                 "llm_enabled": response.raw_results.get("llm_enabled"),
+                "llm_error": response.raw_results.get("llm_error"),
                 "router": response.raw_results.get("router")
                 or response.raw_results.get("query_plan", {}).get("router"),
+                "answer_length": len(response.answer),
             },
         )
 

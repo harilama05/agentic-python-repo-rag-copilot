@@ -451,3 +451,39 @@ class CodebaseTools:
                 for node in result["affected"]
             ],
         }
+
+    def count_symbols(self, symbol_type: str = "all") -> Dict[str, Any]:
+        """Count the number of symbols (functions, classes, methods, or all) in the repository."""
+        symbol_type = symbol_type.lower()
+        counts = {"function": 0, "class": 0, "method": 0}
+        nodes_by_type = {"function": [], "class": [], "method": []}
+
+        for node in self.code_graph.nodes.values():
+            if node.node_type in counts:
+                counts[node.node_type] += 1
+                nodes_by_type[node.node_type].append(node)
+
+        total = sum(counts.values())
+
+        if symbol_type in counts:
+            count = counts[symbol_type]
+            items = [
+                format_graph_node(n, node_role=symbol_type)
+                for n in nodes_by_type[symbol_type]
+            ]
+            return {
+                "symbol_type": symbol_type,
+                "count": count,
+                "items": items,
+            }
+
+        return {
+            "symbol_type": "all",
+            "count": total,
+            "counts_by_type": counts,
+            "items": [
+                format_graph_node(n, node_role=n.node_type)
+                for type_nodes in nodes_by_type.values()
+                for n in type_nodes
+            ],
+        }

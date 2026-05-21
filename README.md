@@ -1,243 +1,177 @@
 # Agentic Python Repo RAG Copilot
 
-Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases. It can load a pre-indexed company repository, temporarily index a public GitHub repository or ZIP upload, retrieve relevant code/docs/config/text chunks, use an AST-based code graph, and answer repository questions with citations.
+Agentic Python Repo RAG Copilot is an AI assistant for understanding Python codebases. It can index local company repositories, temporary public GitHub repositories, and ZIP uploads, then answer codebase questions using hybrid retrieval, pgvector embeddings, and a custom Python AST code graph.
 
-The current version uses **Supabase/PostgreSQL + pgvector** as the single database/storage layer for metadata, chunks, graph data, and embeddings.
+The current version uses **FastAPI + Streamlit + static HTML/CSS/JS frontend** on top of **Supabase/PostgreSQL + pgvector**.
 
 ---
 
-## Current status
+## Current Snapshot
+
+This README is based on the latest reviewed repository snapshot.
 
 Implemented:
 
-- Streamlit UI for local/demo usage
-- FastAPI backend API
-- Supabase/PostgreSQL metadata storage
-- Supabase/PostgreSQL `pgvector` embedding storage
-- Python, Markdown, JSON, and TXT indexing
-- Temporary GitHub repository ingestion
-- Temporary ZIP upload ingestion
-- Persistent company repository indexing
-- In-memory session store for loaded repositories
-- RRF-based multi-source retrieval
-- Optional Cross-Encoder accurate reranking mode
-- LLM query router with fallback routing
-- Grounded answer generation with fallback behavior
-- Custom AST-based Code Graph RAG
-- Caller/callee/impact analysis for Python symbols
-- Code graph persistence in PostgreSQL
-- Repository lifecycle cleanup for temporary repositories
-- Logging
-- Extended evaluation metrics
-- NUL byte sanitization before writing text into PostgreSQL
-- FastAPI CORS support for future frontend integration
+- Streamlit UI for local/debug usage.
+- Static frontend in `frontend/`.
+- FastAPI backend in `api/`.
+- Supabase/PostgreSQL metadata storage.
+- PostgreSQL `pgvector` embedding storage.
+- Python, Markdown, JSON, and TXT indexing.
+- Persistent company repository workflow.
+- Auto-discovered company repositories from `company_repos/`.
+- `repo_config.json` support for company repo display name/description.
+- Temporary GitHub repository ingestion.
+- Temporary ZIP upload ingestion.
+- Temporary repository lifecycle cleanup.
+- In-memory API session store.
+- Hybrid retrieval with vector search, BM25-style scoring, symbol matching, documentation/text search, and RRF fusion.
+- Optional Cross-Encoder reranking in accurate mode.
+- LLM query router/planner with fallback rules.
+- Grounded answer generation with fallback behavior.
+- Custom AST-based Code Graph RAG.
+- Caller/callee/reference/impact/flow tools.
+- Count query support through code graph symbol counting.
+- LLM warning extraction in the API response.
+- Frontend warning rendering for LLM fallback/rate-limit cases.
+- NUL-byte sanitization for text-like content before PostgreSQL writes.
+- Logging and evaluation scripts.
 
-Not currently used:
+Not used as the main architecture:
 
 - Qdrant
 - Chroma
+- Neo4j
 - LangGraph
 - Deep Agents
-- Neo4j
-
-The project has a custom agent workflow and a custom AST-based code graph.
 
 ---
 
-## What the project does
-
-The app helps answer questions such as:
-
-```text
-Where is create_task implemented?
-Where is create_task used?
-What does TaskService.create_task do?
-What calls TaskService.create_task?
-What does TaskService.create_task call?
-If I change create_task, what might be affected?
-Where is JSON indexing mentioned?
-Where is text file indexing mentioned?
-```
-
-For code relationship questions, it uses the Python AST code graph.
-
-For semantic questions, it uses vector retrieval, BM25-style retrieval, symbol metadata, documentation/text retrieval, RRF fusion, and optional reranking.
-
----
-
-## High-level architecture
+## High-Level Architecture
 
 ```text
 User
   ↓
-Streamlit UI / FastAPI API
+Streamlit UI / Static Frontend / FastAPI Client
+  ↓
+FastAPI API or Streamlit service call
   ↓
 Session Store
   ↓
-Loaded IndexedCodebase
+IndexedCodebase
   ↓
-LLM Router or Fallback Router
+LLM Query Planner or fallback router
   ↓
-Query Plan
+Agent tools
+  ├── Hybrid retriever
+  ├── Code graph tools
+  ├── File reader
+  └── Count/symbol tools
   ↓
-Tools:
-  - Semantic/vector retriever
-  - BM25/keyword retriever
-  - Symbol/reference search
-  - Code graph tools
-  - File reader
+Supabase/PostgreSQL + pgvector
   ↓
-Grounded Answer Generator / Fallback Answer
-  ↓
-Answer + sources
+Grounded answer + sources + raw_results + warnings
 ```
 
 ---
 
-## Storage architecture
+## Repository Modes
 
-The current version uses Supabase/PostgreSQL for all persistent database storage.
+### 1. Company Repositories
 
-Main tables:
+Company repositories are persistent repositories managed by the project owner/admin.
 
-```text
-repositories       -> repository metadata
-chunks             -> indexed code/doc/json/text chunks
-chunk_embeddings   -> embeddings stored with pgvector
-code_nodes         -> AST code graph nodes
-code_edges         -> AST code graph edges
-index_jobs         -> indexing job metadata, if used
-```
-
-### What is stored in Supabase/PostgreSQL
+Current folder:
 
 ```text
-Repository metadata
-Chunk text
-Chunk citation metadata
-Vector embeddings
-Code graph nodes
-Code graph edges
-Temporary repo metadata
-Expiration timestamps for temporary repos
+company_repos/
 ```
 
-### What is still local
-
-Temporary GitHub/ZIP source files are still stored locally while the session/repo is active:
+Current sample company repos:
 
 ```text
-data/runtime/github/
-data/runtime/uploads/
+company_repos/taskflow_api
+company_repos/inventory_api
 ```
 
-These files are needed because the app may need to read the original source file for excerpts, citations, and debugging.
+Each repo may include:
 
-### What is not stored
-
-The current design does not need to store full chat history in the database.
-
----
-
-## Repository types
-
-### 1. Company repository
-
-Company repositories are persistent.
+```text
+repo_config.json
+```
 
 Example:
 
-```text
-taskflow_api
+```json
+{
+  "name": "TaskFlow API",
+  "description": "TaskFlow API"
+}
 ```
 
-They use:
-
-```text
-source_type = company
-is_persistent = true
-expires_at = null
-```
-
-Company repositories are indexed by script, not directly by public UI/API.
-
-```powershell
-python -m scripts.index_company_repo taskflow_api
-```
-
-### 2. GitHub temporary repository
-
-A user can provide a public GitHub URL. The app clones and indexes it temporarily.
-
-GitHub temporary repositories use:
+To add a new company repo:
 
 ```text
-source_type = github
-is_persistent = false
-expires_at = set
+1. Copy the source code into company_repos/<repo_id>
+2. Optionally create company_repos/<repo_id>/repo_config.json
+3. Run python -m scripts.index_company_repo <repo_id>
 ```
 
-The cloned source is stored under:
+No Python code change is required for new company repos because `src/services/company_repos.py` auto-discovers folders under `company_repos/`.
+
+### 2. Temporary GitHub Repositories
+
+A public GitHub URL can be cloned and indexed temporarily.
+
+Runtime files are stored under:
 
 ```text
 data/runtime/github/
 ```
 
-### 3. ZIP temporary repository
+The repository is marked temporary and can be cleaned up later.
 
-A user can upload a ZIP file. The app extracts and indexes it temporarily.
+### 3. Temporary ZIP Repositories
 
-ZIP temporary repositories use:
+A ZIP file can be uploaded and indexed temporarily.
 
-```text
-source_type = zip_upload
-is_persistent = false
-expires_at = set
-```
-
-The extracted source is stored under:
+Runtime files are stored under:
 
 ```text
 data/runtime/uploads/
 ```
 
----
-
-## Supported indexed file types
-
-The indexer currently supports:
-
-| File type | Source type | Purpose |
-|---|---:|---|
-| `.py` | `code` | Python functions, classes, methods, AST graph |
-| `.md`, `.markdown` | `doc` | README, guides, docs, changelogs, architecture notes |
-| `.json` | `json` | Config files, structured metadata, examples |
-| `.txt` | `text` | Notes, simple documentation, plain text resources |
-
-The Markdown scanner indexes all `.md` and `.markdown` files that are not ignored.
+ZIP ingestion includes path traversal protection and file count/size checks.
 
 ---
 
-## Ignored files and directories
+## Supported Indexed File Types
 
-Ignored directories include typical generated/runtime folders such as:
+| Extension | Source type | Purpose |
+|---|---|---|
+| `.py` | `code` | Python code, AST graph, symbols |
+| `.md`, `.markdown` | `doc` | README, docs, guides |
+| `.json` | `json` | Config and structured metadata |
+| `.txt` | `text` | Notes and plain text docs |
+
+Ignored directories include:
 
 ```text
-.git/
-.venv/
-venv/
-__pycache__/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.idea/
-.vscode/
-dist/
-build/
-node_modules/
+.git
+.venv
+venv
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.idea
+.vscode
+dist
+build
+node_modules
 ```
 
-Ignored filenames include noisy lock files such as:
+Ignored lock/noisy files include:
 
 ```text
 package-lock.json
@@ -247,477 +181,208 @@ poetry.lock
 pipfile.lock
 ```
 
-The optional file size limit is controlled by:
+The current file size limit is controlled by:
 
 ```python
 MAX_INDEX_FILE_BYTES = None
 ```
 
-Set it to an integer byte value to skip very large files. For example:
-
-```python
-MAX_INDEX_FILE_BYTES = 2 * 1024 * 1024
-```
+`None` means no per-file indexing size limit.
 
 ---
 
-## NUL byte sanitization
+## Storage Model
 
-PostgreSQL text fields cannot store NUL bytes (`\x00`). Some text-like files, especially files with unusual encoding, can contain NUL bytes.
-
-The current version sanitizes NUL bytes in:
+Main PostgreSQL tables:
 
 ```text
-src/parsing/text_parser.py
-src/parsing/json_parser.py
-src/storage/supabase_vector_store.py
-src/storage/metadata/chunk_mixin.py
-src/storage/metadata/utils.py
+repositories
+chunks
+chunk_embeddings
+code_nodes
+code_edges
+index_jobs
 ```
 
-This prevents errors such as:
+What is stored:
 
 ```text
-PostgreSQL text fields cannot contain NUL (0x00) bytes
+Repository metadata
+Chunk text
+Chunk citation metadata
+Vector embeddings
+Code graph nodes
+Code graph edges
+Temporary repository expiration metadata
 ```
 
----
-
-## Retrieval pipeline
-
-### Fast mode
-
-Fast mode uses multi-source retrieval and RRF fusion.
+What remains local:
 
 ```text
-Question
-  ↓
-Vector search
-BM25/keyword search
-Symbol metadata search
-Documentation/text search
-  ↓
-RRF fusion
-  ↓
-Top chunks
+company_repos/
+data/runtime/github/
+data/runtime/uploads/
+frontend/
 ```
 
-### Accurate mode
-
-Accurate mode adds Cross-Encoder reranking after initial retrieval.
-
-```text
-Question
-  ↓
-RRF candidate retrieval
-  ↓
-Cross-Encoder reranking
-  ↓
-Top chunks
-```
+The API session store is currently in memory. If the backend process restarts, sessions are lost and repos need to be loaded again.
 
 ---
 
 ## Code Graph RAG
 
-The project builds a custom AST-derived code graph for Python repositories.
+The project builds an AST-based graph from Python files.
 
-The graph stores:
+Graph nodes include:
 
 ```text
-functions
-classes
-methods
-contains edges
-calls edges
-file paths
-line ranges
-qualified names
+function
+class
+method
 ```
 
-It supports questions such as:
+Graph edges include:
 
 ```text
+contains
+calls
+```
+
+Code graph features include:
+
+```text
+find definitions
+find references
+find callers
+find callees
+impact analysis
+flow analysis
+symbol counting
+```
+
+Example questions:
+
+```text
+Where is create_task implemented?
 Where is create_task used?
 Who calls TaskService.create_task?
 What does TaskService.create_task call?
-What is impacted if create_task changes?
-```
-
-This is custom Code Graph RAG. It is not LangGraph, Neo4j, or a graph database.
-
----
-
-## Agent workflow
-
-The agent workflow is custom Python code.
-
-It includes:
-
-```text
-LLM query router
-Fallback router
-Tool execution
-Retrieval tools
-Graph tools
-Grounded answer generator
-Fallback answer behavior
-```
-
-LangGraph is not required for the current implementation. LangGraph could be added later as an optional workflow orchestrator, but the current project already has an agentic workflow through query planning, tool routing, retrieval, graph tools, and answer generation.
-
----
-
-## Tech stack
-
-Core:
-
-```text
-Python 3.10
-Streamlit
-FastAPI
-SQLAlchemy
-psycopg
-Supabase PostgreSQL
-pgvector
-sentence-transformers
-Cross-Encoder reranking
-Gemini API
-```
-
-Storage:
-
-```text
-Supabase/PostgreSQL
-pgvector
-```
-
-No longer used in the main storage path:
-
-```text
-Qdrant
-Chroma
+What may be affected if create_task changes?
+How many functions are in this repo?
+có mấy hàm trong repo này
 ```
 
 ---
 
-## Project structure
+## Count Query Behavior
+
+The current code includes:
 
 ```text
-agentic-python-repo-rag-copilot/
-├── api/
-│   ├── main.py
-│   ├── schemas.py
-│   └── routes/
-│       ├── chat.py
-│       ├── health.py
-│       ├── repositories.py
-│       └── temporary_repos.py
-│
-├── app/
-│   └── streamlit_app.py
-│
-├── data/
-│   └── eval_cases.json
-│
-├── examples/
-│   ├── sample_python_repo/
-│   └── company_repos/
-│       └── taskflow_api/
-│
-├── scripts/
-│   ├── cleanup_temporary_repos.py
-│   ├── index_company_repo.py
-│   ├── init_db.py
-│   ├── run_eval.py
-│   ├── test_load_existing_repo.py
-│   └── test_storage_connections.py
-│
-├── src/
-│   ├── agent_core/
-│   ├── chunking/
-│   ├── core/
-│   ├── db/
-│   ├── embeddings/
-│   ├── evaluation/
-│   ├── generation/
-│   ├── graph/
-│   ├── indexing/
-│   ├── ingestion/
-│   ├── parsing/
-│   ├── reranking/
-│   ├── retrieval/
-│   ├── services/
-│   └── storage/
-│       ├── lifecycle/
-│       ├── metadata/
-│       └── supabase_vector_store.py
-│
-├── tests/
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-├── .env.example
-├── .env.docker.example
-└── README.md
+QUERY_TYPE_COUNT = "count_query"
 ```
 
----
-
-## Environment variables
-
-Create a `.env` file in the project root.
-
-Do not commit `.env`.
-
-### Supabase cloud example
-
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-LLM_BACKEND=gemini
-
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_publishable_key_here
-
-DATABASE_URL=postgresql+psycopg://postgres.your-project-ref:your_database_password@your-supabase-pooler-host:5432/postgres?sslmode=require
-
-EMBEDDING_DIMENSION=384
-CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8501
-```
-
-Important:
+and a graph-backed tool:
 
 ```text
-SUPABASE_KEY is not the PostgreSQL password.
-DATABASE_URL must use the database password from Supabase.
-For SQLAlchemy + psycopg, prefer postgresql+psycopg://...
+count_symbols(symbol_type)
 ```
 
-### Local Docker PostgreSQL example
+This means count-style questions can be answered from the code graph instead of semantic retrieval.
 
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-LLM_BACKEND=gemini
-
-DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
-
-EMBEDDING_DIMENSION=384
-CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8501
-```
-
-### Docker container example
-
-`.env.docker.example` should use the Docker service name:
-
-```env
-DATABASE_URL=postgresql+psycopg://rag_user:rag_password@postgres:5432/rag_db
-```
-
-Inside Docker, the database host is `postgres`. Outside Docker, the database host is usually `localhost`.
-
----
-
-## Local setup
-
-### 1. Clone repository
-
-```powershell
-git clone https://github.com/harilama05/agentic-python-repo-rag-copilot.git
-cd agentic-python-repo-rag-copilot
-```
-
-To clone a specific branch:
-
-```powershell
-git clone -b newbranch --single-branch https://github.com/harilama05/agentic-python-repo-rag-copilot.git
-```
-
-### 2. Create virtual environment
-
-```powershell
-py -3.10 -m venv .venv
-.venv\Scripts\activate
-```
-
-If `py -3.10` is not available:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```powershell
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-### 4. Create `.env`
-
-Create `.env` in the project root using the examples above.
-
----
-
-## Supabase setup
-
-In Supabase:
-
-1. Create a project.
-2. Open **Connect** and copy the PostgreSQL connection string.
-3. Use the pooler connection string if recommended.
-4. Use the database password, not the Supabase API key.
-5. Put the final SQLAlchemy URL into `.env` as `DATABASE_URL`.
-
-Test:
-
-```powershell
-python -m scripts.test_storage_connections
-```
-
-Expected:
+Examples:
 
 ```text
-Supabase PostgreSQL (...) connection OK: 1
-pgvector extension enabled: True
+how many functions are in this repository?
+count classes
+có mấy hàm trong repo này
+có bao nhiêu class
 ```
 
-Initialize tables:
-
-```powershell
-python -m scripts.init_db
-```
+Current caveat: the fallback router contains deterministic count rules, and the LLM router/planner prompt includes `count_query`. However, if the LLM planner still returns `search_query`, the answer may still go through semantic retrieval. For maximum stability, add a pre-router deterministic check for count/list-symbol questions before calling the LLM planner.
 
 ---
 
-## Optional local Docker database
+## Frontend
 
-If you want a local PostgreSQL database instead of Supabase cloud:
-
-```powershell
-docker compose --profile db up -d postgres
-```
-
-Then use:
-
-```env
-DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:55432/rag_db
-```
-
-Test:
-
-```powershell
-python -m scripts.test_storage_connections
-```
-
----
-
-## Index company repository
-
-Index or re-index the sample company repository:
-
-```powershell
-python -m scripts.index_company_repo taskflow_api
-```
-
-This will:
+The repository includes a static frontend:
 
 ```text
-delete old index data for the repo
-scan supported files
-build chunks
-build code graph
-create embeddings
-write repositories/chunks/embeddings/code graph into Supabase/PostgreSQL
+frontend/
+├── index.html
+├── script.js
+├── styles.css
+└── logo_chatbot.jpg
 ```
 
-The script uses `reset_collection=True`, which means it resets embeddings for the repo before writing the new index.
+The frontend currently uses:
 
-Although the name says `collection`, in the pgvector version it means:
-
-```text
-delete old vectors/embeddings for this repo_id
+```javascript
+const USE_MOCK = false;
+const API_BASE_URL = "http://localhost:8000";
 ```
 
----
+Frontend features:
 
-## Load an existing indexed repository
+- Loads company repos from `GET /company-repos`
+- Loads selected company repo through `POST /company-repos/{repo_id}/load`
+- Indexes temporary GitHub repos through `POST /temporary-repos/github`
+- Uploads temporary ZIP repos through `POST /temporary-repos/zip`
+- Chats through `POST /chat`
+- Stores `session_id`
+- Displays repository stats in the sidebar
+- Renders answer blocks in a Streamlit-like report layout:
+  - Question
+  - LLM warnings
+  - Answer
+  - Query Type
+  - Tools Used
+  - Sources
+  - Raw Results
+- Displays status messages inline in the chat header
+
+Run frontend:
 
 ```powershell
-python -m scripts.test_load_existing_repo
+cd frontend
+python -m http.server 5173
 ```
 
-When prompted, enter:
+Open:
 
 ```text
-taskflow_api
+http://localhost:5173
 ```
 
 ---
 
-## Run evaluation
+## Streamlit UI
 
-```powershell
-python -m scripts.run_eval
-```
-
-The evaluation checks:
-
-```text
-query type routing
-source recall
-source precision
-citation validity
-latency
-answer non-empty rate
-router fallback rate
-LLM failure rate
-graph caller/callee/impact behavior
-```
-
----
-
-## Run Streamlit UI
+Run:
 
 ```powershell
 python -m streamlit run app\streamlit_app.py
 ```
 
-Then open:
+Open:
 
 ```text
 http://localhost:8501
 ```
 
-Test flows:
-
-```text
-Company Repo
-GitHub URL
-ZIP Upload
-```
-
-Suggested UI tests:
-
-```text
-Where is create_task used?
-Where is create_task implemented?
-Where is json indexing mentioned?
-Where is text file indexing mentioned?
-What does TaskService.create_task do?
-```
+Streamlit is useful for debugging because it exposes answer, query type, tools used, sources, and raw results.
 
 ---
 
-## Run FastAPI backend
+## FastAPI Backend
+
+Run:
 
 ```powershell
 uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude "logs/*" --reload-exclude "*.log"
 ```
 
-API docs:
+Open API docs:
 
 ```text
 http://127.0.0.1:8000/docs
@@ -731,7 +396,7 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 
 ---
 
-## FastAPI endpoints
+## API Endpoints
 
 ### Health
 
@@ -739,19 +404,21 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 GET /health
 ```
 
-### List company repositories
+### List company repos
 
 ```http
 GET /company-repos
 ```
 
-### Load company repository
+Returns persistent repositories already indexed in PostgreSQL.
+
+### Load company repo
 
 ```http
 POST /company-repos/{repo_id}/load
 ```
 
-Example:
+Example body:
 
 ```json
 {
@@ -761,7 +428,7 @@ Example:
 }
 ```
 
-The API returns a `session_id`.
+The response includes `session_id`.
 
 ### Chat
 
@@ -769,13 +436,26 @@ The API returns a `session_id`.
 POST /chat
 ```
 
-Example:
+Example body:
 
 ```json
 {
   "session_id": "your-session-id",
-  "question": "Where is create_task used?"
+  "question": "What does create_task do?"
 }
+```
+
+The response includes:
+
+```text
+session_id
+question
+query_type
+answer
+tools_used
+sources
+raw_results
+warnings
 ```
 
 ### Temporary GitHub repo
@@ -784,7 +464,7 @@ Example:
 POST /temporary-repos/github
 ```
 
-Example:
+Example body:
 
 ```json
 {
@@ -802,195 +482,294 @@ Example:
 POST /temporary-repos/zip
 ```
 
-Uses multipart form-data.
+Multipart form-data fields:
 
-### Cleanup temporary repo
+```text
+file
+session_id optional
+retrieval_mode
+use_llm
+use_llm_router
+```
+
+### Delete temporary repo
 
 ```http
 DELETE /temporary-repos/{repo_id}
 ```
 
----
-
-## Check what is stored in the database
-
-The project uses `get_db_session()` as a context manager. Use `with get_db_session() as session:`.
-
-### List repositories
-
-```powershell
-@'
-from sqlalchemy import text
-from src.db.session import get_db_session
-
-with get_db_session() as s:
-    rows = s.execute(text("""
-        SELECT
-            repo_id,
-            name,
-            source_type,
-            is_persistent,
-            file_count,
-            doc_count,
-            ignored_file_count,
-            chunk_count,
-            expires_at,
-            created_at
-        FROM repositories
-        ORDER BY created_at DESC
-        LIMIT 20
-    """)).mappings().all()
-
-for r in rows:
-    print(dict(r))
-'@ | python -
-```
-
-### List chunks for a repo
-
-```powershell
-@'
-from sqlalchemy import text
-from src.db.session import get_db_session
-
-repo_id = "taskflow_api"
-
-with get_db_session() as s:
-    rows = s.execute(text("""
-        SELECT
-            source_type,
-            relative_path,
-            start_line,
-            end_line,
-            symbol_name,
-            qualified_name,
-            symbol_type,
-            heading
-        FROM chunks
-        WHERE repo_id = :repo_id
-        ORDER BY source_type, relative_path, start_line
-    """), {"repo_id": repo_id}).mappings().all()
-
-for r in rows:
-    print(dict(r))
-'@ | python -
-```
-
-### Compare chunks and embeddings
-
-```powershell
-@'
-from sqlalchemy import text
-from src.db.session import get_db_session
-
-repo_id = "taskflow_api"
-
-with get_db_session() as s:
-    chunks = s.execute(
-        text("SELECT COUNT(*) FROM chunks WHERE repo_id = :repo_id"),
-        {"repo_id": repo_id},
-    ).scalar()
-
-    embeddings = s.execute(
-        text("SELECT COUNT(*) FROM chunk_embeddings WHERE repo_id = :repo_id"),
-        {"repo_id": repo_id},
-    ).scalar()
-
-print("chunks:", chunks)
-print("embeddings:", embeddings)
-'@ | python -
-```
-
-### Check temporary GitHub/ZIP repos
-
-```powershell
-@'
-from sqlalchemy import text
-from src.db.session import get_db_session
-
-with get_db_session() as s:
-    rows = s.execute(text("""
-        SELECT
-            repo_id,
-            name,
-            source_type,
-            is_persistent,
-            chunk_count,
-            local_path,
-            expires_at,
-            created_at
-        FROM repositories
-        WHERE source_type IN ('github', 'zip_upload')
-        ORDER BY created_at DESC
-        LIMIT 20
-    """)).mappings().all()
-
-for r in rows:
-    print(dict(r))
-'@ | python -
-```
-
-Temporary repos should have:
+Optional query parameter:
 
 ```text
-is_persistent = false
-expires_at != null
+session_id
 ```
 
-### Test vector search directly
+---
+
+## Environment Variables
+
+Create `.env` in the root folder.
+
+### Supabase cloud example
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+LLM_BACKEND=gemini
+
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_publishable_key_here
+
+DATABASE_URL=postgresql+psycopg://postgres.your-project-ref:your_password@your-supabase-pooler-host:5432/postgres?sslmode=require
+
+EMBEDDING_DIMENSION=384
+CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8501
+```
+
+Do not commit real `.env` secrets.
+
+---
+
+## Local Setup
+
+```powershell
+git clone https://github.com/harilama05/agentic-python-repo-rag-copilot.git
+cd agentic-python-repo-rag-copilot
+
+py -3.10 -m venv .venv
+.venv\Scripts\activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Create `.env`, then test DB:
+
+```powershell
+python -m scripts.test_storage_connections
+```
+
+Expected:
+
+```text
+Supabase PostgreSQL (...) connection OK: 1
+pgvector extension enabled: True
+```
+
+Initialize DB:
+
+```powershell
+python -m scripts.init_db
+```
+
+---
+
+## Index Company Repositories
+
+List discovered company repos:
+
+```powershell
+python -m scripts.index_company_repo --list
+```
+
+Index TaskFlow API:
+
+```powershell
+python -m scripts.index_company_repo taskflow_api
+```
+
+Index Inventory API:
+
+```powershell
+python -m scripts.index_company_repo inventory_api
+```
+
+Re-index after changing any `.py`, `.md`, `.json`, or `.txt` file:
+
+```powershell
+python -m scripts.index_company_repo <repo_id>
+```
+
+This deletes old indexed data for that `repo_id`, scans current files, rebuilds chunks, rebuilds the code graph, regenerates embeddings, and writes the updated state to PostgreSQL/pgvector.
+
+---
+
+## Full Local Run
+
+Terminal 1: backend
+
+```powershell
+cd "D:\Work\agentic-python-repo-rag-copilot\new branch\agentic-python-repo-rag-copilot"
+.venv\Scripts\activate
+uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude "logs/*" --reload-exclude "*.log"
+```
+
+Terminal 2: frontend
+
+```powershell
+cd "D:\Work\agentic-python-repo-rag-copilot\new branch\agentic-python-repo-rag-copilot\frontend"
+python -m http.server 5173
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Optional Streamlit:
+
+```powershell
+python -m streamlit run app\streamlit_app.py
+```
+
+---
+
+## Inspect Database
+
+List repositories:
 
 ```powershell
 @'
-from src.storage.supabase_vector_store import SupabaseCodeVectorStore
+from sqlalchemy import text
+from src.db.session import get_db_session
 
-store = SupabaseCodeVectorStore(repo_id="taskflow_api")
-results = store.search_text("create_task", top_k=5)
+with get_db_session() as s:
+    rows = s.execute(text("""
+        SELECT repo_id, name, source_type, is_persistent,
+               file_count, doc_count, ignored_file_count,
+               chunk_count, expires_at, created_at
+        FROM repositories
+        ORDER BY created_at DESC
+        LIMIT 20
+    """)).mappings().all()
 
-for r in results:
-    print(r["score"], r["relative_path"], r["source_type"], r.get("qualified_name"))
+for row in rows:
+    print(dict(row))
+'@ | python -
+```
+
+Count chunks and embeddings:
+
+```powershell
+@'
+from sqlalchemy import text
+from src.db.session import get_db_session
+
+for repo_id in ["taskflow_api", "inventory_api"]:
+    with get_db_session() as s:
+        chunks = s.execute(
+            text("SELECT COUNT(*) FROM chunks WHERE repo_id = :repo_id"),
+            {"repo_id": repo_id},
+        ).scalar()
+
+        embeddings = s.execute(
+            text("SELECT COUNT(*) FROM chunk_embeddings WHERE repo_id = :repo_id"),
+            {"repo_id": repo_id},
+        ).scalar()
+
+    print(repo_id)
+    print("chunks:", chunks)
+    print("embeddings:", embeddings)
+'@ | python -
+```
+
+Inspect code graph:
+
+```powershell
+@'
+from sqlalchemy import text
+from src.db.session import get_db_session
+
+repo_id = "taskflow_api"
+
+with get_db_session() as s:
+    rows = s.execute(text("""
+        SELECT qualified_name, node_type, relative_path, start_line, end_line
+        FROM code_nodes
+        WHERE repo_id = :repo_id
+        ORDER BY relative_path, start_line
+        LIMIT 50
+    """), {"repo_id": repo_id}).mappings().all()
+
+for row in rows:
+    print(dict(row))
 '@ | python -
 ```
 
 ---
 
-## Cleanup temporary repositories
+## Cleanup Temporary Repositories
 
-List or clean temporary repositories:
+List temporary repos:
 
 ```powershell
 python -m scripts.cleanup_temporary_repos --list
+```
+
+Dry run:
+
+```powershell
 python -m scripts.cleanup_temporary_repos --dry-run
+```
+
+Execute cleanup:
+
+```powershell
 python -m scripts.cleanup_temporary_repos
 ```
 
 ---
 
-## Git workflow
+## Evaluation
 
-Check branch:
-
-```powershell
-git branch --show-current
-```
-
-Commit:
+Run:
 
 ```powershell
-git add .
-git commit -m "Clean Supabase pgvector storage and indexing workflow"
+python -m scripts.run_eval
 ```
 
-Push current branch:
+The evaluation prints:
+
+```text
+Average source precision
+Average citation validity
+Average latency seconds
+Answer non-empty rate
+Router fallback rate
+LLM failure rate
+```
+
+---
+
+## Docker
+
+The repo includes Docker files:
+
+```text
+Dockerfile
+docker-compose.yml
+docker/postgres/init/01_enable_vector.sql
+```
+
+For Supabase cloud, Docker Desktop is not required.
+
+For local PostgreSQL/pgvector:
 
 ```powershell
-git push origin newbranch
+docker compose --profile db up -d postgres
 ```
 
-Push local `newbranch` to remote `main`:
+Use a local `DATABASE_URL`, then run:
 
 ```powershell
-git push origin newbranch:main
+python -m scripts.test_storage_connections
+python -m scripts.init_db
 ```
+
+---
+
+## Git Hygiene
 
 Do not commit:
 
@@ -999,116 +778,56 @@ Do not commit:
 .venv/
 logs/
 data/runtime/
+data/indexes/
+data/repos/
 __pycache__/
 *.pyc
-_updates/
-_nul_updates/
-check_db.py
+*.sqlite
+*.sqlite3
+*.db
+.git/ inside exported ZIP files
+```
+
+The reviewed ZIP still contains `.env`, `.git/`, `data/runtime/`, and `__pycache__/` artifacts. Clean these before sharing a public ZIP.
+
+Recommended before commit:
+
+```powershell
+git status
+git add .
+git status
+git commit -m "Update Agentic RAG copilot"
+git push origin main
 ```
 
 ---
 
-## Troubleshooting
+## Known Current Limitations
 
-### `DATABASE_URL is not set`
+1. **Session store is in memory.**  
+   Backend reloads clear active FastAPI sessions.
 
-Create `.env` or set the variable in the current PowerShell session:
+2. **The uploaded ZIP contains local artifacts.**  
+   `.env`, `.git/`, `data/runtime/`, and `__pycache__/` should be removed from public ZIP exports.
 
-```powershell
-$env:DATABASE_URL="postgresql+psycopg://..."
-```
+3. **No external auth layer yet.**  
+   Do not deploy publicly without authentication and rate limiting.
 
-### `password authentication failed for user postgres`
-
-The Supabase database password is wrong, or the connection string is wrong.
-
-Use the connection string from Supabase Dashboard → Connect.
-
-Do not use `SUPABASE_KEY` as the database password.
-
-### `pgvector extension enabled: False`
-
-Run:
-
-```powershell
-python -m scripts.init_db
-```
-
-or ensure the project has permission to run:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-### `PostgreSQL text fields cannot contain NUL (0x00) bytes`
-
-This means some indexed text contained `\x00`.
-
-The current version sanitizes NUL bytes before writing to PostgreSQL. Re-run the failed indexing after applying the latest parser/storage changes.
-
-### VS Code/Pylance cannot resolve `src...` imports
-
-Open VS Code at the project root and add:
-
-```json
-{
-  "python.analysis.extraPaths": [
-    "."
-  ]
-}
-```
-
-Select the correct `.venv` interpreter.
-
-### Docker local Postgres does not start
-
-The compose file uses profiles. Start DB with:
-
-```powershell
-docker compose --profile db up -d postgres
-```
-
-### CRLF/LF warnings on Windows
-
-Warnings like this are not fatal:
-
-```text
-LF will be replaced by CRLF
-```
-
-You can ignore them, or add `.gitattributes` later.
+4. **`requirements.txt` may still include unused dependencies.**  
+   If Chroma is no longer used, clean it up later.
 
 ---
 
 ## Roadmap
 
-Recommended next steps:
+Recommended next improvements:
 
 ```text
-1. Finalize Streamlit demo flow
-2. Finish FastAPI backend tests
-3. Build a React/Vite frontend
-4. Connect frontend to FastAPI
-5. Deploy backend
-6. Deploy frontend
-7. Add README screenshots/demo video
+1. Add Redis or another persistent session store.
+2. Add pytest tests for API, routing, scanner, chunking, storage, and graph tools.
+3. Clean runtime artifacts from exported ZIPs.
+4. Add deployment docs for backend/frontend.
+5. Add authentication if deployed publicly.
+6. Add incremental indexing for larger repos.
+7. Remove unused dependencies.
 ```
-
-Optional later improvements:
-
-```text
-LangGraph workflow orchestration
-Redis session store
-Incremental indexing
-Better code file intent routing
-Production vector indexes for pgvector
-Authentication
-Saved user repositories
-Better frontend UX
-```
-
----
-
-## License
-
-This project is intended for educational and portfolio use.

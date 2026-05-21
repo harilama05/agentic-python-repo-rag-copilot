@@ -10,6 +10,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 
 class GeminiLLM:
@@ -30,15 +31,13 @@ class GeminiLLM:
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
         """Generate a plain-text answer from a system prompt and user prompt."""
-        full_prompt = f"""
-{system_prompt}
-
-{user_prompt}
-"""
-
         response = self.client.models.generate_content(
             model=self.model,
-            contents=full_prompt,
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.0,
+            ),
         )
 
         return response.text.strip()

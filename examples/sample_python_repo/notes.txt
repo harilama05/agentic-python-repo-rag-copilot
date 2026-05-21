@@ -1,1 +1,0 @@
-This project supports text file indexing.

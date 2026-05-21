@@ -10,6 +10,7 @@ QUERY_TYPE_CALLER = "caller_query"
 QUERY_TYPE_CALLEE = "callee_query"
 QUERY_TYPE_FLOW = "flow_query"
 QUERY_TYPE_MULTI_INTENT = "multi_intent_query"
+QUERY_TYPE_COUNT = "count_query"
 
 SOURCE_TYPE_CODE = "code"
 SOURCE_TYPE_DOC = "doc"

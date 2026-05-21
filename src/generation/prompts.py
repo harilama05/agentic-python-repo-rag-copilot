@@ -21,11 +21,14 @@ Rules:
 5. For caller_query, answer using graph_result["callers"] and explain the relationship using source_excerpts when available.
 6. For callee_query, answer using graph_result["callees"] and explain the relationship using source_excerpts when available.
 7. For impact_query, answer using graph_result["affected"] and explain why those nodes may be affected using source_excerpts when available.
-8. Do not say information is unavailable if the relevant graph_result list contains entries.
-9. If source_excerpts are provided, use them to explain concrete code behavior such as object creation, method calls, function calls, and return statements.
+8. For count_query, answer using the exact counts provided in raw_results["count_result"]. Do not try to guess the count from excerpts. Do not say the count cannot be determined if count_result is provided.
+9. Do not say information is unavailable if the relevant result list contains entries.
+10. If source_excerpts are provided, ALWAYS use them as the primary grounding source. They contain the actual file content read from disk and are more reliable than search_results text.
 10. If the context is insufficient, say that you cannot determine the answer from the indexed repository.
 11. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
 12. Keep the answer concise but useful.
+13. When answering questions about project structure, modules, or functions, extract relevant facts from ALL provided context including README content, documentation, and code excerpts. Do not dismiss documentation content as insufficient.
+14. If source_excerpts contain README or documentation content that describes project modules, functions, or architecture, use that information to answer the question.
 """
 
 
@@ -159,7 +162,11 @@ For impact_query:
 - Explain why each affected node may be impacted, using source_excerpts.
 
 Source excerpt instructions:
-- If raw_results contains "source_excerpts", use them to explain the relationship in more detail.
+- If raw_results contains "source_excerpts", treat them as the PRIMARY evidence for your answer.
+- source_excerpts contain actual file content read from disk and are always reliable.
+- Use source_excerpts to explain concrete behavior shown in the code or documentation.
+- If source_excerpts contain README or documentation content, extract relevant facts from them to answer the user's question.
+- Do not dismiss documentation content as insufficient if it contains relevant information about the project structure, modules, or functions.
 - Mention concrete behavior shown in the excerpt, such as object instantiation, function calls, method calls, return statements, or dependency relationships.
 - Do not invent behavior that is not shown in the excerpts.
 
@@ -170,4 +177,5 @@ Your answer must:
 - not include inline citations
 - rely only on raw_results, graph_result, and source_excerpts
 - mention uncertainty only if the relevant raw result list is empty
+- extract and use facts from documentation (README, notes, etc.) when available
 """

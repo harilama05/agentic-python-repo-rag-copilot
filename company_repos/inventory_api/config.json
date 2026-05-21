@@ -1,0 +1,6 @@
+{
+  "service": "inventory_api",
+  "feature": "inventory indexing",
+  "description": "This JSON file is used to test config indexing for the Inventory API.",
+  "default_reorder_threshold": 10
+}

@@ -20,6 +20,7 @@ from src.core.constants import (
     QUERY_TYPE_LOCATION,
     QUERY_TYPE_REFERENCE,
     QUERY_TYPE_SEARCH,
+    QUERY_TYPE_COUNT,
 )
 from src.generation.llm import GeminiLLM
 
@@ -34,6 +35,7 @@ ALLOWED_QUERY_TYPES = {
     QUERY_TYPE_CALLEE,
     QUERY_TYPE_IMPACT,
     QUERY_TYPE_FLOW,
+    QUERY_TYPE_COUNT,
 }
 
 
@@ -95,9 +97,13 @@ Use when the user asks about execution flow, request flow, call chain, or how lo
 9. search_query
 Use for broad semantic search, feature search, or questions that do not fit the above types.
 
+10. count_query
+Use when the user asks how many of a specific symbol type exist (e.g., "how many functions", "how many classes", "how many methods", or "có mấy hàm", "có bao nhiêu class"). Set symbol to the type requested (e.g. "function", "class", "method").
+
 Symbol extraction rules:
 - Extract symbol only if the question explicitly contains a concrete code symbol.
 - Valid examples: create_user, create_task, UserService, TaskService.create_task.
+- For count_query, set symbol to exactly one of "function", "class", "method", or "all".
 - Do not invent symbols.
 - Do not translate natural language into a guessed symbol.
 - Do not set symbol to natural language phrases such as "task creation", "tao task", "user creation", or "ham tao task".
@@ -131,6 +137,7 @@ Allowed query_type values:
 - callee_query: what a function/method calls
 - impact_query: what may be affected if a symbol changes
 - flow_query: execution flow, request flow, call chain, or how logic moves through components
+- count_query: how many functions/classes/methods exist
 - search_query: general semantic code search
 
 Rules:
@@ -222,6 +229,9 @@ def is_valid_code_symbol(value: str | None) -> bool:
 
     if re.match(pattern, value) is None:
         return False
+
+    if value in {"function", "class", "method", "all"}:
+        return True
 
     if "." in value:
         return True
@@ -451,6 +461,31 @@ def rule_based_fallback_route(question: str) -> QueryPlan:
         "quy trinh",
     ]):
         query_type = QUERY_TYPE_FLOW
+    elif any(phrase in q for phrase in [
+        "how many",
+        "count",
+        "co may",
+        "co bao nhieu",
+        "so luong",
+    ]):
+        query_type = QUERY_TYPE_COUNT
+        # simple heuristic for symbol type in fallback
+        symbol = "all"
+        if "function" in q or "ham" in q:
+            symbol = "function"
+        elif "class" in q or "lop" in q:
+            symbol = "class"
+        elif "method" in q or "phuong thuc" in q:
+            symbol = "method"
+        
+        return QueryPlan(
+            query_type=query_type,
+            symbol=symbol,
+            rewritten_query=question,
+            confidence=0.0,
+            reason="Fallback rule-based routing for counting.",
+            router="fallback_rule",
+        )
     else:
         query_type = QUERY_TYPE_SEARCH
 
