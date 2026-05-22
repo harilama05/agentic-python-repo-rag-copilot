@@ -678,24 +678,70 @@ class CodebaseAgent:
         )
 
     def _answer_count_query(self, question: str, symbol: str | None) -> AgentResponse:
-        """Answer queries asking to count symbols (functions, classes, etc.)"""
+        """Answer queries asking to count symbols or files."""
+
+        # ── File counting ──────────────────────────────────────────
+        if symbol in ("file", "python_file", "all_files"):
+            file_type = "python" if symbol in ("file", "python_file") else "all"
+            tools_used = [f'count_files("{file_type}")']
+            result = self.tools.count_files(file_type)
+
+            file_list = result.get("files", [])
+            count = result.get("count", 0)
+            ext_counts = result.get("counts_by_extension", {})
+
+            # Build a detailed fallback answer listing every file
+            if file_type == "python":
+                answer = f"🔍 Tìm thấy **{count}** file Python trong codebase:\n"
+            else:
+                answer = f"🔍 Tìm thấy **{count}** file trong codebase:\n"
+                if ext_counts:
+                    for ext, ext_count in ext_counts.items():
+                        answer += f"\n- {ext_count} file `{ext}`"
+                    answer += "\n"
+
+            answer += "\n"
+            for f in file_list:
+                answer += f"- `{f['relative_path']}` ({f['line_count']} dòng)\n"
+
+            # Sources: one entry per file, pointing to the whole file
+            sources = [
+                {
+                    "relative_path": f["relative_path"],
+                    "line_start": 1,
+                    "line_end": f["line_count"],
+                    "symbol": f["relative_path"].split("/")[-1],
+                    "type": f["extension"],
+                }
+                for f in file_list
+            ]
+
+            return AgentResponse(
+                question=question,
+                query_type="count_query",
+                answer=answer,
+                tools_used=tools_used,
+                sources=sources,
+                raw_results={
+                    "count_result": result,
+                },
+            )
+
+        # ── Symbol counting (original behavior) ───────────────────
         symbol_type = symbol if symbol in ("function", "class", "method") else "all"
         tools_used = [f'count_symbols("{symbol_type}")']
-        
+
         result = self.tools.count_symbols(symbol_type)
-        
+
         if symbol_type == "all":
             answer = f"🔍 Đã tìm thấy tổng cộng **{result['count']}** symbols trong codebase:\n"
             for stype, count in result.get("counts_by_type", {}).items():
                 answer += f"\n- {count} {stype}s"
         else:
             answer = f"🔍 Đã tìm thấy tổng cộng **{result['count']}** {symbol_type}s trong codebase."
-            
+
         sources = result.get("items", [])
-        
-        # We don't want to build source_excerpts for hundreds of functions,
-        # it would blow up the context window. LLM doesn't need excerpts to report a count.
-        
+
         return AgentResponse(
             question=question,
             query_type="count_query",

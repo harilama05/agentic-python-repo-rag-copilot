@@ -708,7 +708,16 @@ function createStreamlitSourcesBlock(sources) {
     const section = document.createElement("section");
     section.className = "streamlit-sources";
 
-    section.appendChild(createSectionTitle("Sources"));
+    const totalCount = sources.length;
+
+    /* Outer collapsible box wrapping all sources */
+    const outerDetails = document.createElement("details");
+    outerDetails.className = "streamlit-details sources-outer-details";
+
+    const outerSummary = document.createElement("summary");
+    outerSummary.className = "sources-outer-summary";
+    outerSummary.innerHTML = `<strong>Sources</strong> <span class="sources-count-badge">${totalCount}</span>`;
+    outerDetails.appendChild(outerSummary);
 
     const list = document.createElement("ol");
     list.className = "streamlit-source-list";
@@ -761,10 +770,13 @@ function createStreamlitSourcesBlock(sources) {
         details.appendChild(pre);
 
         item.appendChild(details);
+
         list.appendChild(item);
     });
 
-    section.appendChild(list);
+    outerDetails.appendChild(list);
+
+    section.appendChild(outerDetails);
     return section;
 }
 
@@ -906,7 +918,11 @@ function renderInlineMarkdown(value) {
 }
 
 function enrichSourcesWithRawResults(sources, rawResults, answerCodeFallback = "") {
+    /* Build a lookup map from source_excerpts in raw_results keyed by path:startLine-endLine */
+    const excerptMap = buildExcerptMap(rawResults);
+
     return (sources || []).map((source) => {
+        /* 1. Use existing excerpt if already present in the source */
         const existingExcerpt =
             source.excerpt ||
             source.text ||
@@ -921,116 +937,115 @@ function enrichSourcesWithRawResults(sources, rawResults, answerCodeFallback = "
             };
         }
 
-        const rawExcerpt = findExcerptForSource(source, rawResults);
+        /* 2. Match against source_excerpts by path+lines */
+        const rawExcerpt = findExcerptForSource(source, rawResults, excerptMap);
 
         return {
             ...source,
-            excerpt: rawExcerpt || answerCodeFallback,
+            excerpt: rawExcerpt || "",
         };
     });
 }
 
-function findExcerptForSource(source, rawResults) {
-    if (!rawResults) return "";
+function buildExcerptMap(rawResults) {
+    const map = new Map();
+    if (!rawResults) return map;
 
-    const directFileContent =
-        rawResults.file_content ||
-        rawResults.fileContent ||
-        rawResults.source_excerpt ||
-        rawResults.sourceExcerpt;
+    /* Collect source_excerpts from top level and from sub_responses */
+    const excerptArrays = [];
 
-    if (typeof directFileContent === "string" && directFileContent.trim()) {
-        return directFileContent;
-    }
-
-    const sourceExcerpts =
+    const topExcerpts =
         rawResults.source_excerpts ||
         rawResults.sourceExcerpts ||
         rawResults.excerpts;
 
-    const fromSourceExcerpts = findExcerptInValue(source, sourceExcerpts, 0, true);
-    if (fromSourceExcerpts) return fromSourceExcerpts;
+    if (Array.isArray(topExcerpts)) {
+        excerptArrays.push(topExcerpts);
+    }
 
-    const fileContents =
-        rawResults.file_contents ||
-        rawResults.fileContents ||
-        rawResults.files;
+    const subResponses = rawResults.sub_responses || rawResults.subResponses;
+    if (Array.isArray(subResponses)) {
+        for (const sub of subResponses) {
+            const subRaw = sub.raw_results || sub.rawResults || {};
+            const subExcerpts =
+                subRaw.source_excerpts ||
+                subRaw.sourceExcerpts ||
+                subRaw.excerpts;
 
-    const fromFileContents = findExcerptInValue(source, fileContents, 0, true);
-    if (fromFileContents) return fromFileContents;
+            if (Array.isArray(subExcerpts)) {
+                excerptArrays.push(subExcerpts);
+            }
+        }
+    }
 
-    return findExcerptInValue(source, rawResults, 0, false);
+    for (const arr of excerptArrays) {
+        for (const item of arr) {
+            if (!item || typeof item !== "object") continue;
+
+            const content = item.content || item.text || item.excerpt || item.code || "";
+            if (!content) continue;
+
+            const path = normalizePathForCompare(
+                item.relative_path || item.file_path || item.path || ""
+            );
+            const lineStart = item.line_start || item.start_line;
+            const lineEnd = item.line_end || item.end_line;
+
+            if (path) {
+                /* Exact key: path:startLine-endLine */
+                const exactKey = `${path}:${lineStart}-${lineEnd}`;
+                if (!map.has(exactKey)) {
+                    map.set(exactKey, content);
+                }
+
+                /* Path-only key as fallback (first excerpt per path wins) */
+                if (!map.has(path)) {
+                    map.set(path, content);
+                }
+            }
+        }
+    }
+
+    return map;
 }
 
-function findExcerptInValue(source, value, depth = 0, allowStringFallback = false) {
-    if (!value || depth > 7) {
-        return "";
-    }
-
-    if (typeof value === "string") {
-        return allowStringFallback ? value : "";
-    }
-
-    if (Array.isArray(value)) {
-        for (const item of value) {
-            const result = findExcerptInValue(source, item, depth + 1, allowStringFallback);
-            if (result) return result;
-        }
-
-        return "";
-    }
-
-    if (typeof value !== "object") {
-        return "";
-    }
+function findExcerptForSource(source, rawResults, excerptMap) {
+    if (!rawResults) return "";
 
     const sourcePath = normalizePathForCompare(
         source.relative_path || source.file_path || source.path || ""
     );
+    const lineStart = source.line_start || source.start_line;
+    const lineEnd = source.line_end || source.end_line;
 
-    for (const [key, item] of Object.entries(value)) {
-        const keyPath = normalizePathForCompare(key);
-
-        if (
-            typeof item === "string" &&
-            sourcePath &&
-            pathsLookRelated(sourcePath, keyPath)
-        ) {
-            return item;
-        }
+    /* 1. Try exact match from excerptMap: path:startLine-endLine */
+    if (sourcePath && lineStart != null && lineEnd != null) {
+        const exactKey = `${sourcePath}:${lineStart}-${lineEnd}`;
+        const exact = excerptMap.get(exactKey);
+        if (exact) return exact;
     }
 
-    const objectPath = normalizePathForCompare(
-        value.relative_path ||
-        value.file_path ||
-        value.path ||
-        value.filename ||
-        value.file ||
-        ""
-    );
-
-    const objectExcerpt =
-        value.excerpt ||
-        value.text ||
-        value.content ||
-        value.code ||
-        value.file_content ||
-        value.fileContent ||
-        "";
-
-    if (
-        typeof objectExcerpt === "string" &&
-        objectExcerpt.trim() &&
-        (!sourcePath || !objectPath || pathsLookRelated(sourcePath, objectPath))
-    ) {
-        return objectExcerpt;
+    /* 2. Try path-only match (first excerpt for that file) */
+    if (sourcePath) {
+        const pathOnly = excerptMap.get(sourcePath);
+        if (pathOnly) return pathOnly;
     }
 
-    for (const item of Object.values(value)) {
-        const result = findExcerptInValue(source, item, depth + 1, allowStringFallback);
-        if (result) return result;
+    /* 3. Check direct file_content (for explanation queries with single source) */
+    const directFileContent = rawResults.file_content || rawResults.fileContent;
+    if (directFileContent && typeof directFileContent === "object" && directFileContent.content) {
+        return directFileContent.content;
+    }
+    if (typeof directFileContent === "string" && directFileContent.trim()) {
+        return directFileContent;
     }
 
+    return "";
+}
+
+/* findExcerptInValue is no longer used — excerpt matching is now done via buildExcerptMap.
+   Kept as a no-op for safety in case anything still calls it. */
+function findExcerptInValue() {
     return "";
 }
 

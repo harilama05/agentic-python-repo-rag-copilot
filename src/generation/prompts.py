@@ -21,7 +21,12 @@ Rules:
 5. For caller_query, answer using graph_result["callers"] and explain the relationship using source_excerpts when available.
 6. For callee_query, answer using graph_result["callees"] and explain the relationship using source_excerpts when available.
 7. For impact_query, answer using graph_result["affected"] and explain why those nodes may be affected using source_excerpts when available.
-8. For count_query, answer using the exact counts provided in raw_results["count_result"]. Do not try to guess the count from excerpts. Do not say the count cannot be determined if count_result is provided.
+8. For count_query:
+   - If raw_results["count_result"] contains a "files" list, list ALL files in your answer with their paths. Do not summarize or truncate the list.
+   - If raw_results["count_result"] contains counts, use the exact counts provided. Do not guess.
+   - When listing files, format them as a numbered or bulleted list with the relative path and line count.
+   - When counting symbols (functions/classes/methods), provide the count and optionally group notable ones by file.
+   - Do not say the count cannot be determined if count_result is provided.
 9. Do not say information is unavailable if the relevant result list contains entries.
 10. If source_excerpts are provided, ALWAYS use them as the primary grounding source. They contain the actual file content read from disk and are more reliable than search_results text.
 10. If the context is insufficient, say that you cannot determine the answer from the indexed repository.

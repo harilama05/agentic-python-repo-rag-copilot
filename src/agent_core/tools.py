@@ -8,7 +8,13 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.core.constants import IGNORE_DIRS, PYTHON_EXTENSIONS
+from src.core.constants import (
+    DOC_EXTENSIONS,
+    IGNORE_DIRS,
+    JSON_EXTENSIONS,
+    PYTHON_EXTENSIONS,
+    TEXT_EXTENSIONS,
+)
 from src.graph.code_graph import CodeGraph, CodeNode
 from src.reranking.cross_encoder_reranker import CrossEncoderReranker
 from src.reranking.reranker import NoOpReranker
@@ -486,4 +492,63 @@ class CodebaseTools:
                 for type_nodes in nodes_by_type.values()
                 for n in type_nodes
             ],
+        }
+
+    def count_files(self, file_type: str = "python") -> Dict[str, Any]:
+        """Count and list files in the repository by type.
+
+        Parameters
+        ----------
+        file_type:
+            ``"python"`` for ``.py`` files only, ``"all"`` for all
+            supported indexed file types.
+        """
+        if file_type == "python":
+            extensions = PYTHON_EXTENSIONS
+        else:
+            extensions = PYTHON_EXTENSIONS | DOC_EXTENSIONS | JSON_EXTENSIONS | TEXT_EXTENSIONS
+
+        files: list[Dict[str, Any]] = []
+
+        for file_path in sorted(self.repo_root.rglob("*")):
+            if not file_path.is_file():
+                continue
+
+            if any(part in IGNORE_DIRS for part in file_path.parts):
+                continue
+
+            if file_path.suffix.lower() not in extensions:
+                continue
+
+            try:
+                relative_path = str(
+                    file_path.resolve().relative_to(self.repo_root)
+                ).replace("\\", "/")
+            except ValueError:
+                relative_path = str(file_path)
+
+            try:
+                line_count = len(
+                    file_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+                )
+            except Exception:
+                line_count = 0
+
+            files.append({
+                "relative_path": relative_path,
+                "extension": file_path.suffix.lower(),
+                "line_count": line_count,
+            })
+
+        # Group counts by extension
+        ext_counts: Dict[str, int] = {}
+        for f in files:
+            ext = f["extension"]
+            ext_counts[ext] = ext_counts.get(ext, 0) + 1
+
+        return {
+            "file_type": file_type,
+            "count": len(files),
+            "counts_by_extension": ext_counts,
+            "files": files,
         }

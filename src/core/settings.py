@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_EMBEDDING_DIMENSION = 384
 
-DEFAULT_TOP_K = 5
+DEFAULT_TOP_K = 10
 DEFAULT_CANDIDATE_K = 20
 
 VECTOR_WEIGHT = 0.40
