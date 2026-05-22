@@ -599,7 +599,7 @@ This deletes old indexed data for that `repo_id`, scans current files, rebuilds 
 Terminal 1: backend
 
 ```powershell
-cd "D:\Work\agentic-python-repo-rag-copilot\new branch\agentic-python-repo-rag-copilot"
+cd "...\agentic-python-repo-rag-copilot"
 .venv\Scripts\activate
 uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude "logs/*" --reload-exclude "*.log"
 ```
@@ -607,7 +607,7 @@ uvicorn api.main:app --reload --reload-dir api --reload-dir src --reload-exclude
 Terminal 2: frontend
 
 ```powershell
-cd "D:\Work\agentic-python-repo-rag-copilot\new branch\agentic-python-repo-rag-copilot\frontend"
+cd "...\agentic-python-repo-rag-copilot\frontend"
 python -m http.server 5173
 ```
 
