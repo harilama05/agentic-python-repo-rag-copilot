@@ -680,8 +680,26 @@ class CodebaseAgent:
     def _answer_count_query(self, question: str, symbol: str | None) -> AgentResponse:
         """Answer queries asking to count symbols or files."""
 
+        # ── Detect file-counting intent ────────────────────────────
+        # The LLM router may return symbol="all" even when the user
+        # clearly asks about files.  Fall back to file counting when
+        # the question contains file-related keywords.
+        _file_counting_symbols = ("file", "python_file", "all_files")
+
+        if symbol not in _file_counting_symbols:
+            q_lower = question.lower()
+            if any(w in q_lower for w in ["file", "tệp", "tập tin"]):
+                has_python = any(w in q_lower for w in ["python", ".py"])
+                has_other = any(w in q_lower for w in ["json", "txt", "md", "text", "all", "tất cả", "hết", "toàn bộ"])
+                if has_python and has_other:
+                    symbol = "all_files"
+                elif has_python:
+                    symbol = "python_file"
+                else:
+                    symbol = "all_files"
+
         # ── File counting ──────────────────────────────────────────
-        if symbol in ("file", "python_file", "all_files"):
+        if symbol in _file_counting_symbols:
             file_type = "python" if symbol in ("file", "python_file") else "all"
             tools_used = [f'count_files("{file_type}")']
             result = self.tools.count_files(file_type)
@@ -709,12 +727,14 @@ class CodebaseAgent:
                 {
                     "relative_path": f["relative_path"],
                     "line_start": 1,
-                    "line_end": f["line_count"],
+                    "line_end": max(f["line_count"], 1),
                     "symbol": f["relative_path"].split("/")[-1],
                     "type": f["extension"],
                 }
                 for f in file_list
             ]
+
+            source_excerpts = self._build_source_excerpts(sources)
 
             return AgentResponse(
                 question=question,
@@ -724,6 +744,7 @@ class CodebaseAgent:
                 sources=sources,
                 raw_results={
                     "count_result": result,
+                    "source_excerpts": source_excerpts,
                 },
             )
 
@@ -1052,8 +1073,8 @@ class CodebaseAgent:
                 excerpts.append(
                     {
                         "relative_path": relative_path,
-                        "line_start": file_content["start_line"],
-                        "line_end": file_content["end_line"],
+                        "line_start": line_start,
+                        "line_end": line_end,
                         "symbol": source.get("symbol"),
                         "role": source.get("source_role") or source.get("role") or source.get("type"),
                         "content": file_content["content"],

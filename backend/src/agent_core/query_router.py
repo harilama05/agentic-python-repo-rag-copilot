@@ -480,10 +480,15 @@ def rule_based_fallback_route(question: str) -> QueryPlan:
         # Determine if user asks about files or symbols
         symbol = "all"
         if any(w in q for w in ["file", "tap tin"]):
-            if any(w in q for w in ["python", ".py"]):
+            # Check if user asks about multiple file types or all files
+            has_python = any(w in q for w in ["python", ".py"])
+            has_other = any(w in q for w in ["json", "txt", "md", "markdown", "text", "all", "tat ca", "het", "toan bo"])
+            if has_python and has_other:
+                symbol = "all_files"
+            elif has_python:
                 symbol = "python_file"
             else:
-                symbol = "file"
+                symbol = "all_files"
         elif "function" in q or "ham" in q:
             symbol = "function"
         elif "class" in q or "lop" in q:

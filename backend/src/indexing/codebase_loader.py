@@ -70,12 +70,6 @@ def load_existing_codebase_agent(
 
     repo_path = Path(repo.local_path).resolve()
 
-    if not repo_path.exists():
-        raise ValueError(
-            f"Repository local_path does not exist: {repo_path}. "
-            "Re-index this repository or restore the source folder."
-        )
-
     collection_name = getattr(repo, "collection_name", None) or repo.repo_id
     repo_name = getattr(repo, "repo_name", None) or repo.repo_id
     source_type = getattr(repo, "source_type", None) or REPO_SOURCE_COMPANY

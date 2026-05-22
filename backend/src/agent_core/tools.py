@@ -246,6 +246,79 @@ class CodebaseTools:
 
         return definitions
 
+    @staticmethod
+    def _extract_chunk_code(text: str) -> str:
+        """Strip metadata headers from chunk text, returning only the source content.
+
+        Code chunks use ``\nCode:\n`` as separator, documentation chunks use
+        ``\nContent:\n``.  Text/JSON chunks have no header at all.
+        Handles both ``\n`` and ``\r\n`` line endings.
+        """
+        normalized = str(text).replace("\r\n", "\n")
+
+        # Code chunks (from code_chunker)
+        if "\nCode:\n" in normalized:
+            return normalized.split("\nCode:\n", 1)[1]
+
+        # Documentation chunks (from markdown_chunker)
+        if "\nContent:\n" in normalized:
+            return normalized.split("\nContent:\n", 1)[1]
+
+        # Text/JSON chunks have no wrapper — return as-is
+        return normalized
+
+    def _get_chunk_meta(self, chunk):
+        """Extract (relative_path, start_line, end_line, code_text) from a chunk."""
+        meta = chunk if isinstance(chunk, dict) else getattr(chunk, "metadata", {})
+        if isinstance(chunk, dict) and "metadata" in chunk:
+            meta = chunk["metadata"]
+
+        p = (
+            (chunk.get("relative_path") if isinstance(chunk, dict) else getattr(chunk, "relative_path", None))
+            or meta.get("relative_path")
+            or meta.get("file_path")
+        )
+
+        start = (
+            (chunk.get("start_line") if isinstance(chunk, dict) else getattr(chunk, "start_line", None))
+            or meta.get("start_line")
+            or meta.get("line_start")
+            or 1
+        )
+
+        end = (
+            (chunk.get("end_line") if isinstance(chunk, dict) else getattr(chunk, "end_line", None))
+            or meta.get("end_line")
+            or meta.get("line_end")
+            or 0
+        )
+
+        text = (
+            (chunk.get("text") if isinstance(chunk, dict) else getattr(chunk, "text", None))
+            or meta.get("text")
+            or ""
+        )
+
+        return str(p or ""), int(start), int(end), self._extract_chunk_code(text)
+
+    def _read_file_from_db(self, relative_path: str) -> List[str]:
+        target_path = str(relative_path).replace("\\", "/")
+        lines_dict = {}
+
+        for chunk in self.retriever.indexed_chunks:
+            p, start, _end, code_text = self._get_chunk_meta(chunk)
+            if not p or str(p).replace("\\", "/") != target_path:
+                continue
+
+            for i, line in enumerate(code_text.splitlines()):
+                lines_dict[start + i] = line
+
+        if not lines_dict:
+            raise FileNotFoundError(f"File not found in database: {relative_path}")
+
+        max_line = max(lines_dict.keys())
+        return [lines_dict.get(i, "") for i in range(1, max_line + 1)]
+
     def read_file(
         self,
         file_path: str,
@@ -257,22 +330,15 @@ class CodebaseTools:
         path = Path(file_path)
 
         if not path.is_absolute():
-            path = self.repo_root / path
+            relative_path = str(path).replace("\\", "/")
+        else:
+            try:
+                relative_path = str(path.resolve().relative_to(self.repo_root.resolve())).replace("\\", "/")
+            except ValueError:
+                relative_path = str(path).replace("\\", "/")
 
-        path = path.resolve()
+        lines = self._read_file_from_db(relative_path)
 
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {path}")
-
-        if not path.is_file():
-            raise ValueError(f"Path is not a file: {path}")
-
-        try:
-            relative_path = str(path.relative_to(self.repo_root))
-        except ValueError:
-            relative_path = str(path)
-
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
         total_lines = len(lines)
 
         if start_line is None:
@@ -299,6 +365,60 @@ class CodebaseTools:
             "content": numbered_text,
         }
 
+    def _find_references_in_db(self, patterns: list, short_symbol: str, include_definition: bool, symbol_name: str, max_results: int) -> List[Dict[str, Any]]:
+        references = []
+        for chunk in self.retriever.indexed_chunks:
+            p, start, _end, code_text = self._get_chunk_meta(chunk)
+            if not p:
+                continue
+
+            relative_path = str(p).replace("\\", "/")
+            if not any(relative_path.endswith(ext) for ext in PYTHON_EXTENSIONS):
+                continue
+
+            for i, line in enumerate(code_text.splitlines()):
+                if not any(pattern.search(line) for pattern in patterns):
+                    continue
+                
+                stripped = line.strip()
+                is_definition = (
+                    stripped.startswith(f"def {short_symbol}(")
+                    or stripped.startswith(f"async def {short_symbol}(")
+                    or stripped.startswith(f"class {short_symbol}(")
+                    or stripped.startswith(f"class {short_symbol}:")
+                )
+                
+                if is_definition and not include_definition:
+                    continue
+                    
+                reference_type = "definition" if is_definition else "reference"
+                line_number = start + i
+                
+                # Check if we already added this reference from an overlapping chunk
+                if any(r["relative_path"] == relative_path and r["line_start"] == line_number for r in references):
+                    continue
+
+                references.append(
+                    normalize_source(
+                        relative_path=relative_path,
+                        line_start=line_number,
+                        line_end=line_number,
+                        symbol=symbol_name,
+                        source_type=reference_type,
+                        source_role=reference_type,
+                        extra={
+                            "line_number": line_number,
+                            "line": line,
+                            "is_definition": is_definition,
+                            "reference_type": reference_type,
+                        },
+                    )
+                )
+
+                if len(references) >= max_results:
+                    return references
+        return references
+
     def find_references(
         self,
         symbol_name: str,
@@ -318,70 +438,7 @@ class CodebaseTools:
         if "." in symbol_name:
             patterns.append(re.compile(re.escape(symbol_name)))
 
-        for file_path in self.repo_root.rglob("*"):
-            if not file_path.is_file():
-                continue
-
-            if file_path.suffix.lower() not in PYTHON_EXTENSIONS:
-                continue
-
-            if any(part in IGNORE_DIRS for part in file_path.parts):
-                continue
-
-            try:
-                lines = file_path.read_text(
-                    encoding="utf-8",
-                    errors="ignore",
-                ).splitlines()
-            except Exception:
-                continue
-
-            for line_number, line in enumerate(lines, start=1):
-                if not any(pattern.search(line) for pattern in patterns):
-                    continue
-
-                stripped = line.strip()
-                is_definition = (
-                    stripped.startswith(f"def {short_symbol}(")
-                    or stripped.startswith(f"async def {short_symbol}(")
-                    or stripped.startswith(f"class {short_symbol}(")
-                    or stripped.startswith(f"class {short_symbol}:")
-                )
-
-                if is_definition and not include_definition:
-                    continue
-
-                reference_type = "definition" if is_definition else "reference"
-
-                try:
-                    relative_path = str(file_path.resolve().relative_to(self.repo_root))
-                except ValueError:
-                    relative_path = str(file_path)
-
-                relative_path = relative_path.replace("\\", "/")
-
-                references.append(
-                    normalize_source(
-                        relative_path=relative_path,
-                        line_start=line_number,
-                        line_end=line_number,
-                        symbol=symbol_name,
-                        source_type=reference_type,
-                        source_role=reference_type,
-                        extra={
-                            "file_path": str(file_path.resolve()),
-                            "line_number": line_number,
-                            "line": line,
-                            "is_definition": is_definition,
-                            "reference_type": reference_type,
-                        },
-                    )
-                )
-
-                if len(references) >= max_results:
-                    return references
-
-        return references
+        return self._find_references_in_db(patterns, short_symbol, include_definition, symbol_name, max_results)
 
     def find_callers(self, symbol_name: str) -> Dict[str, Any]:
         """Find functions or methods that call the given symbol."""
@@ -510,35 +567,38 @@ class CodebaseTools:
 
         files: list[Dict[str, Any]] = []
 
-        for file_path in sorted(self.repo_root.rglob("*")):
-            if not file_path.is_file():
+        file_info: Dict[str, Dict[str, Any]] = {}  # path -> {extension, max_end_line}
+
+        for chunk in self.retriever.indexed_chunks:
+            p, start, end, _code = self._get_chunk_meta(chunk)
+            if not p:
                 continue
 
-            if any(part in IGNORE_DIRS for part in file_path.parts):
+            relative_path = str(p).replace("\\", "/")
+            ext = Path(relative_path).suffix.lower()
+
+            if ext not in extensions:
                 continue
 
-            if file_path.suffix.lower() not in extensions:
-                continue
+            if relative_path not in file_info:
+                file_info[relative_path] = {
+                    "extension": ext,
+                    "max_end_line": end or start,
+                }
+            else:
+                current_max = file_info[relative_path]["max_end_line"]
+                candidate = end or start
+                if candidate > current_max:
+                    file_info[relative_path]["max_end_line"] = candidate
 
-            try:
-                relative_path = str(
-                    file_path.resolve().relative_to(self.repo_root)
-                ).replace("\\", "/")
-            except ValueError:
-                relative_path = str(file_path)
-
-            try:
-                line_count = len(
-                    file_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-                )
-            except Exception:
-                line_count = 0
-
-            files.append({
-                "relative_path": relative_path,
-                "extension": file_path.suffix.lower(),
-                "line_count": line_count,
-            })
+        files = [
+            {
+                "relative_path": path,
+                "extension": info["extension"],
+                "line_count": info["max_end_line"],
+            }
+            for path, info in sorted(file_info.items())
+        ]
 
         # Group counts by extension
         ext_counts: Dict[str, int] = {}

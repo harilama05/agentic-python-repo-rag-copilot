@@ -15,9 +15,10 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
+from src.core.config import COMPANY_REPOS_DIR
 
 
-COMPANY_REPOS_ROOT = Path("company_repos")
+COMPANY_REPOS_ROOT = COMPANY_REPOS_DIR
 
 
 @dataclass

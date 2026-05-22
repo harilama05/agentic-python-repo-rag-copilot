@@ -10,8 +10,8 @@ REPOS_DIR = DATA_DIR / "repos"
 INDEX_DIR = DATA_DIR / "indexes"
 RUNTIME_DIR = DATA_DIR / "runtime"
 
-EXAMPLES_DIR = PROJECT_ROOT / "examples"
-COMPANY_REPOS_DIR = EXAMPLES_DIR / "company_repos"
+COMPANY_REPOS_DIR = PROJECT_ROOT.parent / "company_repos"
+
 
 EVAL_CASES_PATH = DATA_DIR / "eval_cases.json"
 
