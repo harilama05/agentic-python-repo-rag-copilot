@@ -1,5 +1,5 @@
 const USE_MOCK = false;
-const API_BASE_URL = "";
+const API_BASE_URL = "/api";
 
 let selectedCodebase = null;
 let companyRepos = [];

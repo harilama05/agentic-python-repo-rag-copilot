@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://dungkdl-agentic-rag-copilot.onrender.com/api/$1"
+      "destination": "https://dungkdl-agentic-rag-copilot.onrender.com/$1"
     }
   ]
 }
