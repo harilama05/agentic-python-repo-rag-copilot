@@ -24,6 +24,21 @@ _SOURCE_RE = re.compile(
     r"^(?P<path>.*?):(?P<start>\d+)(?:-(?P<end>\d+))?$"
 )
 
+_ABSTENTION_PATTERNS = [
+    "không thấy",
+    "chưa thấy",
+    "không tìm thấy",
+    "không có bằng chứng",
+    "không đủ thông tin",
+    "không có thông tin",
+    "không xác định được",
+    "not found",
+    "no evidence",
+    "not enough information",
+    "cannot determine",
+    "could not find",
+]
+
 
 def now_seconds() -> float:
     """Return a monotonic timestamp for latency measurement."""
@@ -118,6 +133,42 @@ def source_key(source: Any) -> tuple[str, int | None, int | None]:
     )
 
 
+def source_path(source: Any) -> str:
+    """Return the normalized relative file path for a source."""
+    return normalize_source(source)["relative_path"]
+
+
+def source_matches(expected: Any, actual: Any) -> bool:
+    """Return True when an actual source satisfies an expected source.
+
+    A ranged actual source matches when it fully covers the expected range.
+    If either side only has a file path, matching falls back to path equality.
+    """
+    expected_normalized = normalize_source(expected)
+    actual_normalized = normalize_source(actual)
+
+    expected_path = expected_normalized["relative_path"]
+    actual_path = actual_normalized["relative_path"]
+
+    if not expected_path or expected_path != actual_path:
+        return False
+
+    expected_start = expected_normalized["line_start"]
+    expected_end = expected_normalized["line_end"]
+    actual_start = actual_normalized["line_start"]
+    actual_end = actual_normalized["line_end"]
+
+    if (
+        expected_start is None
+        or expected_end is None
+        or actual_start is None
+        or actual_end is None
+    ):
+        return True
+
+    return actual_start <= expected_start and expected_end <= actual_end
+
+
 def compute_source_precision(
     actual_sources: list[Any],
     expected_sources: list[Any],
@@ -131,12 +182,83 @@ def compute_source_precision(
     if not actual_sources:
         return 0.0
 
-    expected_keys = {source_key(source) for source in expected_sources}
-    actual_keys = [source_key(source) for source in actual_sources]
+    hits = sum(
+        1
+        for actual_source in actual_sources
+        if any(
+            source_matches(expected_source, actual_source)
+            for expected_source in expected_sources
+        )
+    )
 
-    hits = sum(1 for key in actual_keys if key in expected_keys)
+    return hits / len(actual_sources)
 
-    return hits / len(actual_keys)
+
+def compute_file_hit_rate(
+    actual_sources: list[Any],
+    expected_files: list[str],
+) -> float:
+    """Compute how many expected files appear in actual sources."""
+    if not expected_files:
+        return 1.0
+
+    actual_paths = {source_path(source) for source in actual_sources}
+    expected_paths = {
+        str(file_path).replace("\\", "/").strip()
+        for file_path in expected_files
+    }
+    hits = sum(1 for expected_path in expected_paths if expected_path in actual_paths)
+
+    return hits / len(expected_paths)
+
+
+def compute_keyword_recall(
+    answer: str | None,
+    expected_keywords: list[str],
+) -> float:
+    """Compute expected keyword recall for an answer."""
+    if not expected_keywords:
+        return 1.0
+
+    normalized_answer = (answer or "").lower()
+    normalized_keywords = [keyword.lower() for keyword in expected_keywords]
+    hits = sum(1 for keyword in normalized_keywords if keyword in normalized_answer)
+
+    return hits / len(normalized_keywords)
+
+
+def has_forbidden_keywords(
+    answer: str | None,
+    forbidden_keywords: list[str],
+) -> bool:
+    """Return True when an answer contains forbidden keywords."""
+    if not forbidden_keywords:
+        return False
+
+    normalized_answer = (answer or "").lower()
+
+    return any(
+        keyword.lower() in normalized_answer
+        for keyword in forbidden_keywords
+    )
+
+
+def is_abstaining(answer: str | None) -> bool:
+    """Return True when an answer appears to refuse due to missing evidence."""
+    normalized_answer = (answer or "").lower()
+
+    return any(pattern in normalized_answer for pattern in _ABSTENTION_PATTERNS)
+
+
+def compute_abstention_correct(
+    answer: str | None,
+    requires_abstention: bool,
+) -> bool | None:
+    """Compute abstention correctness when the case requires abstention."""
+    if not requires_abstention:
+        return None
+
+    return is_abstaining(answer)
 
 
 def validate_citations(

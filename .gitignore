@@ -11,9 +11,9 @@ logs/
 .env
 .env.local
 
-data/indexes/
-data/repos/
-data/runtime/
+backend/data/indexes/
+backend/data/repos/
+backend/data/runtime/
 
 .DS_Store
 .ipynb_checkpoints/
