@@ -21,6 +21,7 @@ from src.evaluation.metrics import (
 )
 from src.indexing.codebase_indexer import build_codebase_agent
 from src.core.settings import RETRIEVAL_MODE_FAST
+from src.core.config import EVAL_CASES_PATH, COMPANY_REPOS_DIR
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -34,10 +35,12 @@ def resolve_repo_path(repo_path: str) -> Path:
     if path.exists():
         return path
 
-    if repo_path == "examples/sample_python_repo":
-        fallback = Path("data/repos/sample_python_repo")
-        if fallback.exists():
-            return fallback
+    # Fallback: try resolving as a company repo by folder name
+    repo_name = Path(repo_path).name
+    company_fallback = COMPANY_REPOS_DIR / repo_name
+
+    if company_fallback.exists():
+        return company_fallback
 
     return path
 
@@ -192,7 +195,7 @@ def print_summary(title, results, extended_results):
 
 def main() -> None:
     """Run the repository QA evaluation suite."""
-    eval_path = Path("data/eval_cases.json")
+    eval_path = EVAL_CASES_PATH
 
     cases = load_eval_cases(eval_path)
     print(f"Loaded {len(cases)} eval cases")

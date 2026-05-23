@@ -42,6 +42,7 @@ services:
     volumes:
       - ./data/runtime:/app/data/runtime
       - ./logs:/app/logs
+      - ../company_repos:/company_repos:ro
     # If you want to run a local pgvector/postgres instance, start the `postgres` service
     # with the `db` profile: `docker compose --profile db up -d postgres`
     command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,109 @@
+[
+  {
+    "id": "taskflow_01",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "What does create_task do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": ["app/api/tasks.py"],
+    "expected_files": ["app/api/tasks.py", "app/services/task_service.py"],
+    "expected_keywords": ["create_task", "title", "assignee"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_02",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is create_task implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": ["app/api/tasks.py", "app/services/task_service.py"],
+    "expected_files": ["app/api/tasks.py", "app/services/task_service.py"],
+    "expected_keywords": ["create_task"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_03",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is create_task used?",
+    "expected_query_type": "reference_query",
+    "expected_sources": ["app/api/tasks.py"],
+    "expected_files": ["app/api/tasks.py"],
+    "expected_keywords": ["create_task"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_04",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Who calls create_task?",
+    "expected_query_type": "caller_query",
+    "expected_sources": ["app/api/tasks.py"],
+    "expected_keywords": ["create_task"],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_05",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "How many Python files are there?",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_keywords": ["3"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_01",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "What does create_item do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": ["app/api/inventory.py"],
+    "expected_files": ["app/api/inventory.py", "app/services/inventory_service.py"],
+    "expected_keywords": ["create_item", "sku", "name", "quantity"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_02",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Where is update_stock implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": ["app/api/inventory.py", "app/services/inventory_service.py"],
+    "expected_files": ["app/api/inventory.py", "app/services/inventory_service.py"],
+    "expected_keywords": ["update_stock"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_03",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "What is the InventoryItem class?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": ["app/models/item.py"],
+    "expected_files": ["app/models/item.py"],
+    "expected_keywords": ["InventoryItem", "sku", "quantity"],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_04",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "What happens if update_stock changes quantity?",
+    "expected_query_type": "impact_query",
+    "expected_sources": ["app/services/inventory_service.py"],
+    "expected_keywords": ["update_stock", "quantity"],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_05",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Find code related to restock",
+    "expected_query_type": "search_query",
+    "expected_sources": ["app/models/item.py"],
+    "expected_files": ["app/models/item.py"],
+    "expected_keywords": ["needs_restock", "reorder_threshold"],
+    "difficulty": "medium"
+  }
+]

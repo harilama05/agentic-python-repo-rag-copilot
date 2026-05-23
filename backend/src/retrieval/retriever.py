@@ -11,7 +11,7 @@ Behavior is intentionally kept compatible with the previous implementation in
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from src.core.constants import DOCUMENTATION_QUERY_TYPE
+from src.core.constants import QUERY_TYPE_DOCUMENTATION
 from src.core.settings import (
     DEFAULT_CANDIDATE_K,
     DEFAULT_TOP_K,
@@ -226,7 +226,7 @@ class CodeRetriever:
         )
 
         documentation_results: list[tuple[str, Any, float]] = []
-        if query_type == DOCUMENTATION_QUERY_TYPE:
+        if query_type == QUERY_TYPE_DOCUMENTATION:
             documentation_results = documentation_search(
                 indexed_chunks=self.indexed_chunks,
                 query=query,
