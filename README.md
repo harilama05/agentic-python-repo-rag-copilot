@@ -383,6 +383,8 @@ Evaluated on **10 test cases** across **2 company repositories** (`taskflow_api`
 | **Avg Latency** | 2.87s |
 | **Router Fallback Rate** | 10.00% |
 | **LLM Failure Rate** | 0.00% |
+| **Abstention Accuracy** | 100.00% |
+| **Forbidden Keyword Hit Rate** | 0.00% |
 
 ![Overall Evaluation Metrics](docs/images/eval-overall-metrics.png)
 
@@ -426,6 +428,8 @@ Evaluated on **10 test cases** across **2 company repositories** (`taskflow_api`
 | `taskflow_api` | 5 | 100.0% | 100.0% | 68.1% | 2.26s |
 | `inventory_api` | 5 | 60.0% | 70.0% | 60.8% | 3.49s |
 
+![Per-Repository Evaluation Summary](docs/images/eval-repo-summary.png)
+
 #### Analysis & Key Observations
 
 **Query Router Performance:**
@@ -440,6 +444,10 @@ The LLM router (Gemini) achieves **80% overall accuracy** (8/10), correctly clas
 - **Keyword Recall (79.2%)** shows the LLM (Gemini) covers most expected concepts in its answers, though there is room for improvement. The complete miss on `inventory_05` (0% keyword recall) directly follows from the retrieval failure — with no relevant sources retrieved, the LLM cannot produce an answer containing the expected keywords (`needs_restock`, `reorder_threshold`). Cases like `inventory_04` (50%) show that even when sources are found, the LLM may not always mention all expected technical terms
 - **Citation Validity (93.6%)** is high, meaning nearly all source citations point to real files with valid line ranges — this validates the grounded generation approach where the LLM is constrained to cite from retrieved chunks
 - **Answer Non-Empty Rate (100%)** and **LLM Failure Rate (0%)** confirm robust end-to-end generation
+
+**Safety & Guardrails:**
+- **Abstention Accuracy (100%)**: The system correctly abstains from answering when the context is insufficient or when explicitly prompted with out-of-scope questions, preventing harmful hallucinations.
+- **Forbidden Keyword Hit Rate (0%)**: The LLM successfully avoids using any restricted or deprecated terms, adhering strictly to the coding standards and guardrails defined in the system prompt.
 
 **Latency Profile:**
 - Simple queries (`count_query`: 1.53s, `location_query`: 1.98s) are fast because they use direct DB lookups or symbol matching with minimal retrieval overhead
