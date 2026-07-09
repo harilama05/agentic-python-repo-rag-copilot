@@ -8,11 +8,11 @@ Agentic Python Repo RAG Copilot is an AI-powered assistant for understanding Pyt
 
 | Chat Interface | Sources & Citations |
 |:-:|:-:|
-| ![Chat UI](docs/images/chat-ui.png) | ![Sources](docs/images/sources-panel.png) |
+| <img src="docs/images/chat-ui.png" alt="Chat UI" width="800"> | <img src="docs/images/sources-panel.png" alt="Sources" width="800"> |
 
 | Supabase Database |
 |:-:|
-| ![Supabase](docs/images/supabase-db.jpg) |
+| <img src="docs/images/supabase-db.jpg" alt="Supabase" width="800"> |
 
 ---
 
@@ -386,7 +386,7 @@ Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api
 | **Abstention Accuracy** | 100.00% |
 | **Forbidden Keyword Hit Rate** | 0.00% |
 
-![Overall Evaluation Metrics](docs/images/eval-overall-metrics.jpg)
+<img src="docs/images/eval-overall-metrics.jpg" alt="Overall Evaluation Metrics" width="800">
 
 #### Results by Query Type
 
@@ -400,7 +400,7 @@ Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api
 | `impact_query` | 10 | 70.0% | 55.0% | 36.7% | 4.12s |
 | `search_query` | 10 | 70.0% | 80.0% | 65.0% | 3.29s |
 
-![Evaluation Results by Query Type](docs/images/eval-query-type-results.jpg)
+<img src="docs/images/eval-query-type-results.jpg" alt="Evaluation Results by Query Type" width="800">
 
 #### Per-Repository Summary
 
@@ -412,7 +412,7 @@ Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api
 | `payment_gateway` | 20 | 95.0% | 100.0% | 65.7% | 87.5% | 2.71s |
 | `notification_service` | 20 | 70.0% | 90.0% | 64.5% | 80.8% | 2.74s |
 
-![Per-Repository Evaluation Summary](docs/images/eval-repo-summary.jpg)
+<img src="docs/images/eval-repo-summary.jpg" alt="Per-Repository Evaluation Summary" width="800">
 
 #### Results by Difficulty
 
@@ -422,7 +422,7 @@ Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api
 | `medium` | 40 | 80.0% | 86.2% | 70.8% | 2.91s |
 | `hard` | 15 | 66.7% | 66.7% | 52.2% | 3.56s |
 
-![Evaluation Results by Difficulty](docs/images/eval-difficulty-results.jpg)
+<img src="docs/images/eval-difficulty-results.jpg" alt="Evaluation Results by Difficulty" width="800">
 
 #### Top 10 Performers
 
