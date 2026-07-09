@@ -1,109 +1,1880 @@
 [
   {
-    "id": "taskflow_01",
+    "id": "taskflow_api_001",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
     "question": "What does create_task do?",
     "expected_query_type": "explanation_query",
-    "expected_sources": ["app/api/tasks.py"],
-    "expected_files": ["app/api/tasks.py", "app/services/task_service.py"],
-    "expected_keywords": ["create_task", "title", "assignee"],
+    "expected_sources": [
+      "app/api/tasks.py",
+      "app/services/task_service.py"
+    ],
+    "expected_files": [
+      "app/api/tasks.py",
+      "app/services/task_service.py"
+    ],
+    "expected_keywords": [
+      "create_task",
+      "delete_task"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "taskflow_02",
+    "id": "taskflow_api_002",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
-    "question": "Where is create_task implemented?",
-    "expected_query_type": "location_query",
-    "expected_sources": ["app/api/tasks.py", "app/services/task_service.py"],
-    "expected_files": ["app/api/tasks.py", "app/services/task_service.py"],
-    "expected_keywords": ["create_task"],
+    "question": "Explain how update_task works",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/tasks.py",
+      "app/models/task.py"
+    ],
+    "expected_files": [
+      "app/api/tasks.py",
+      "app/models/task.py"
+    ],
+    "expected_keywords": [
+      "update_task",
+      "create_task"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "taskflow_03",
+    "id": "taskflow_api_003",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
-    "question": "Where is create_task used?",
-    "expected_query_type": "reference_query",
-    "expected_sources": ["app/api/tasks.py"],
-    "expected_files": ["app/api/tasks.py"],
-    "expected_keywords": ["create_task"],
+    "question": "Describe what delete_task does step by step",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/tasks.py"
+    ],
+    "expected_files": [
+      "app/api/tasks.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "delete_task",
+      "create_task"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "taskflow_04",
+    "id": "taskflow_api_004",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
-    "question": "Who calls create_task?",
-    "expected_query_type": "caller_query",
-    "expected_sources": ["app/api/tasks.py"],
-    "expected_keywords": ["create_task"],
+    "question": "Explain how get_task_by_id works",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/tasks.py",
+      "app/models/task.py"
+    ],
+    "expected_files": [
+      "app/api/tasks.py",
+      "app/models/task.py"
+    ],
+    "expected_keywords": [
+      "get_task_by_id",
+      "create_task",
+      "delete_task"
+    ],
     "difficulty": "medium"
   },
   {
-    "id": "taskflow_05",
+    "id": "taskflow_api_005",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Explain how list_tasks works",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/tasks.py"
+    ],
+    "expected_files": [
+      "app/api/tasks.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "list_tasks",
+      "delete_task",
+      "create_task"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_006",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is TaskService implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/task_service.py",
+      "app/utils/validators.py"
+    ],
+    "expected_files": [
+      "app/services/task_service.py",
+      "app/utils/validators.py"
+    ],
+    "expected_keywords": [
+      "TaskService",
+      "assign_task"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_api_007",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is validate_task implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/task_service.py"
+    ],
+    "expected_files": [
+      "app/services/task_service.py"
+    ],
+    "expected_keywords": [
+      "validate_task",
+      "assign_task"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_api_008",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is assign_task defined?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/task_service.py"
+    ],
+    "expected_files": [
+      "app/services/task_service.py"
+    ],
+    "expected_keywords": [
+      "assign_task",
+      "TaskService"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_api_009",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "In which file is complete_task located?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/task_service.py",
+      "app/utils/validators.py"
+    ],
+    "expected_files": [
+      "app/services/task_service.py",
+      "app/utils/validators.py"
+    ],
+    "expected_keywords": [
+      "complete_task",
+      "TaskService",
+      "validate_task"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_010",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is TaskModel used?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/task.py"
+    ],
+    "expected_files": [
+      "app/models/task.py"
+    ],
+    "expected_keywords": [
+      "TaskModel",
+      "TaskPriority"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "taskflow_api_011",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is TaskStatus used?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/task.py"
+    ],
+    "expected_files": [
+      "app/models/task.py"
+    ],
+    "expected_keywords": [
+      "TaskStatus",
+      "TaskPriority",
+      "TaskModel"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_012",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Where is TaskPriority referenced?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/task.py"
+    ],
+    "expected_files": [
+      "app/models/task.py"
+    ],
+    "expected_keywords": [
+      "TaskPriority",
+      "TaskModel",
+      "TaskStatus"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_013",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Which callers invoke validate_task_input?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/utils/validators.py",
+      "app/services/task_service.py"
+    ],
+    "expected_files": [
+      "app/utils/validators.py",
+      "app/services/task_service.py"
+    ],
+    "expected_keywords": [
+      "validate_task_input",
+      "validate_deadline",
+      "sanitize_input"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_014",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Who calls validate_deadline?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/utils/validators.py"
+    ],
+    "expected_files": [
+      "app/utils/validators.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "validate_deadline",
+      "sanitize_input",
+      "validate_task_input"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "taskflow_api_015",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "What would break if sanitize_input is removed?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/utils/validators.py"
+    ],
+    "expected_files": [
+      "app/utils/validators.py",
+      "app/models/task.py"
+    ],
+    "expected_keywords": [
+      "sanitize_input",
+      "validate_deadline",
+      "validate_task_input"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_016",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "What is affected if we modify Settings?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/config.py"
+    ],
+    "expected_files": [
+      "app/config.py",
+      "app/services/task_service.py"
+    ],
+    "expected_keywords": [
+      "Settings",
+      "get_settings"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "taskflow_api_017",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Show me code about task priority",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/config.py"
+    ],
+    "expected_files": [
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "Settings",
+      "get_settings"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "taskflow_api_018",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "Find code related to task assignment",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/api/tasks.py"
+    ],
+    "expected_files": [
+      "app/api/tasks.py"
+    ],
+    "expected_keywords": [
+      "delete_task",
+      "get_task_by_id"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "taskflow_api_019",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
     "question": "How many Python files are there?",
     "expected_query_type": "count_query",
     "expected_sources": [],
-    "expected_keywords": ["3"],
+    "expected_files": [],
+    "expected_keywords": [
+      "4"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "inventory_01",
+    "id": "taskflow_api_020",
+    "repo_id": "taskflow_api",
+    "repo_path": "company_repos/taskflow_api",
+    "question": "How many classes are defined?",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "4"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_api_021",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "What does create_item do?",
+    "question": "How does create_item handle its logic?",
     "expected_query_type": "explanation_query",
-    "expected_sources": ["app/api/inventory.py"],
-    "expected_files": ["app/api/inventory.py", "app/services/inventory_service.py"],
-    "expected_keywords": ["create_item", "sku", "name", "quantity"],
+    "expected_sources": [
+      "app/api/inventory.py",
+      "app/config.py"
+    ],
+    "expected_files": [
+      "app/api/inventory.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "create_item",
+      "delete_item"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "inventory_02",
+    "id": "inventory_api_022",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "Where is update_stock implemented?",
+    "question": "Explain how update_stock works",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/inventory.py"
+    ],
+    "expected_files": [
+      "app/api/inventory.py",
+      "app/utils/stock_calculator.py"
+    ],
+    "expected_keywords": [
+      "update_stock",
+      "list_items"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_api_023",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Describe what get_item does step by step",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/inventory.py",
+      "app/config.py"
+    ],
+    "expected_files": [
+      "app/api/inventory.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "get_item",
+      "delete_item"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_api_024",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "What is the purpose of list_items?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/inventory.py",
+      "app/models/item.py"
+    ],
+    "expected_files": [
+      "app/api/inventory.py",
+      "app/models/item.py"
+    ],
+    "expected_keywords": [
+      "list_items",
+      "update_stock",
+      "get_item"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_025",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "How does delete_item handle its logic?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/inventory.py",
+      "app/services/inventory_service.py"
+    ],
+    "expected_files": [
+      "app/api/inventory.py",
+      "app/services/inventory_service.py"
+    ],
+    "expected_keywords": [
+      "delete_item",
+      "create_item",
+      "list_items"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_026",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Where is InventoryService implemented?",
     "expected_query_type": "location_query",
-    "expected_sources": ["app/api/inventory.py", "app/services/inventory_service.py"],
-    "expected_files": ["app/api/inventory.py", "app/services/inventory_service.py"],
-    "expected_keywords": ["update_stock"],
+    "expected_sources": [
+      "app/services/inventory_service.py",
+      "app/config.py"
+    ],
+    "expected_files": [
+      "app/services/inventory_service.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "InventoryService",
+      "release_stock"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "inventory_03",
+    "id": "inventory_api_027",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "What is the InventoryItem class?",
-    "expected_query_type": "explanation_query",
-    "expected_sources": ["app/models/item.py"],
-    "expected_files": ["app/models/item.py"],
-    "expected_keywords": ["InventoryItem", "sku", "quantity"],
+    "question": "Where is check_availability defined?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/inventory_service.py"
+    ],
+    "expected_files": [
+      "app/services/inventory_service.py"
+    ],
+    "expected_keywords": [
+      "check_availability",
+      "release_stock"
+    ],
     "difficulty": "easy"
   },
   {
-    "id": "inventory_04",
+    "id": "inventory_api_028",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "What happens if update_stock changes quantity?",
+    "question": "Find the definition of reserve_stock",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/inventory_service.py"
+    ],
+    "expected_files": [
+      "app/services/inventory_service.py"
+    ],
+    "expected_keywords": [
+      "reserve_stock",
+      "release_stock"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_api_029",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Where is release_stock defined?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/inventory_service.py",
+      "app/api/inventory.py"
+    ],
+    "expected_files": [
+      "app/services/inventory_service.py",
+      "app/api/inventory.py"
+    ],
+    "expected_keywords": [
+      "release_stock",
+      "reserve_stock",
+      "check_availability"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_030",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Which files import or use InventoryItem?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/item.py"
+    ],
+    "expected_files": [
+      "app/models/item.py"
+    ],
+    "expected_keywords": [
+      "InventoryItem",
+      "StockLevel"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_api_031",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Which files import or use StockLevel?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/item.py"
+    ],
+    "expected_files": [
+      "app/models/item.py"
+    ],
+    "expected_keywords": [
+      "StockLevel",
+      "needs_restock",
+      "InventoryItem"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_032",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Find all references to needs_restock",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/item.py"
+    ],
+    "expected_files": [
+      "app/models/item.py"
+    ],
+    "expected_keywords": [
+      "needs_restock",
+      "InventoryItem",
+      "StockLevel"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_033",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Which callers invoke reorder_threshold?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/models/item.py",
+      "app/services/inventory_service.py"
+    ],
+    "expected_files": [
+      "app/models/item.py",
+      "app/services/inventory_service.py"
+    ],
+    "expected_keywords": [
+      "reorder_threshold",
+      "InventoryItem",
+      "StockLevel"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_034",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Which callers invoke calculate_reorder_point?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/utils/stock_calculator.py"
+    ],
+    "expected_files": [
+      "app/utils/stock_calculator.py",
+      "app/services/inventory_service.py"
+    ],
+    "expected_keywords": [
+      "calculate_reorder_point",
+      "forecast_demand",
+      "safety_stock"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "inventory_api_035",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "What would break if forecast_demand is removed?",
     "expected_query_type": "impact_query",
-    "expected_sources": ["app/services/inventory_service.py"],
-    "expected_keywords": ["update_stock", "quantity"],
+    "expected_sources": [
+      "app/utils/stock_calculator.py"
+    ],
+    "expected_files": [
+      "app/utils/stock_calculator.py",
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "forecast_demand",
+      "safety_stock",
+      "calculate_reorder_point"
+    ],
     "difficulty": "medium"
   },
   {
-    "id": "inventory_05",
+    "id": "inventory_api_036",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "Find code related to restock",
+    "question": "What is affected if we modify safety_stock?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/utils/stock_calculator.py"
+    ],
+    "expected_files": [
+      "app/utils/stock_calculator.py",
+      "app/api/inventory.py"
+    ],
+    "expected_keywords": [
+      "safety_stock",
+      "calculate_reorder_point",
+      "forecast_demand"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "inventory_api_037",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Find code related to warehouse config",
     "expected_query_type": "search_query",
-    "expected_sources": ["app/models/item.py"],
-    "expected_files": ["app/models/item.py"],
-    "expected_keywords": ["needs_restock", "reorder_threshold"],
+    "expected_sources": [
+      "app/config.py"
+    ],
+    "expected_files": [
+      "app/config.py"
+    ],
+    "expected_keywords": [
+      "InventoryConfig",
+      "get_warehouse_settings"
+    ],
     "difficulty": "medium"
+  },
+  {
+    "id": "inventory_api_038",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Show me code about warehouse config",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/services/inventory_service.py"
+    ],
+    "expected_files": [
+      "app/services/inventory_service.py"
+    ],
+    "expected_keywords": [
+      "reserve_stock",
+      "release_stock"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "inventory_api_039",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "Count the number of API endpoints",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "4"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "inventory_api_040",
+    "repo_id": "inventory_api",
+    "repo_path": "company_repos/inventory_api",
+    "question": "How many functions are in config.py?",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "8"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_041",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "What is the purpose of login?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/auth.py",
+      "app/utils/password_hasher.py"
+    ],
+    "expected_files": [
+      "app/api/auth.py",
+      "app/utils/password_hasher.py"
+    ],
+    "expected_keywords": [
+      "login",
+      "refresh_token"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_042",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "How does register handle its logic?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/auth.py"
+    ],
+    "expected_files": [
+      "app/api/auth.py",
+      "app/utils/password_hasher.py"
+    ],
+    "expected_keywords": [
+      "register",
+      "logout"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_043",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "What does logout do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/auth.py"
+    ],
+    "expected_files": [
+      "app/api/auth.py",
+      "app/middleware/jwt_handler.py"
+    ],
+    "expected_keywords": [
+      "logout",
+      "register"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_044",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Describe what refresh_token does step by step",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/auth.py"
+    ],
+    "expected_files": [
+      "app/api/auth.py",
+      "app/models/user.py"
+    ],
+    "expected_keywords": [
+      "refresh_token",
+      "login",
+      "verify_email"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_045",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "What does verify_email do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/auth.py",
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/api/auth.py",
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "verify_email",
+      "login",
+      "logout"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_046",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Where is AuthService implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "AuthService",
+      "create_access_token"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_047",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Where is authenticate_user implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "authenticate_user",
+      "hash_password"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_048",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Find the definition of create_access_token",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "create_access_token",
+      "authenticate_user"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_049",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Find the definition of hash_password",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "hash_password",
+      "AuthService",
+      "authenticate_user"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_050",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Which files import or use UserModel?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/user.py"
+    ],
+    "expected_files": [
+      "app/models/user.py"
+    ],
+    "expected_keywords": [
+      "UserModel",
+      "UserSession"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_051",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Find all references to UserRole",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/user.py"
+    ],
+    "expected_files": [
+      "app/models/user.py"
+    ],
+    "expected_keywords": [
+      "UserRole",
+      "UserSession",
+      "UserModel"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_052",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Where is UserSession used?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/user.py"
+    ],
+    "expected_files": [
+      "app/models/user.py"
+    ],
+    "expected_keywords": [
+      "UserSession",
+      "UserModel",
+      "UserRole"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_053",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Which callers invoke JWTHandler?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/middleware/jwt_handler.py",
+      "app/models/user.py"
+    ],
+    "expected_files": [
+      "app/middleware/jwt_handler.py",
+      "app/models/user.py"
+    ],
+    "expected_keywords": [
+      "JWTHandler",
+      "decode_token",
+      "token_required"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_054",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Who calls decode_token?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/middleware/jwt_handler.py",
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/middleware/jwt_handler.py",
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "decode_token",
+      "JWTHandler",
+      "verify_token"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "auth_service_055",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "What is affected if we modify verify_token?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/middleware/jwt_handler.py"
+    ],
+    "expected_files": [
+      "app/middleware/jwt_handler.py",
+      "app/models/user.py"
+    ],
+    "expected_keywords": [
+      "verify_token",
+      "JWTHandler",
+      "decode_token"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_056",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "What happens if token_required changes?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/middleware/jwt_handler.py",
+      "app/api/auth.py"
+    ],
+    "expected_files": [
+      "app/middleware/jwt_handler.py",
+      "app/api/auth.py"
+    ],
+    "expected_keywords": [
+      "token_required",
+      "verify_token",
+      "JWTHandler"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "auth_service_057",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Find code related to password hashing",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/services/auth_service.py"
+    ],
+    "expected_files": [
+      "app/services/auth_service.py"
+    ],
+    "expected_keywords": [
+      "hash_password",
+      "authenticate_user"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "auth_service_058",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Find code related to session management",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/middleware/jwt_handler.py"
+    ],
+    "expected_files": [
+      "app/middleware/jwt_handler.py"
+    ],
+    "expected_keywords": [
+      "JWTHandler",
+      "token_required"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "auth_service_059",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "How many Python files are there?",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "6"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "auth_service_060",
+    "repo_id": "auth_service",
+    "repo_path": "company_repos/auth_service",
+    "question": "Count the number of API endpoints",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "5"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_061",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "How does create_payment handle its logic?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/payments.py"
+    ],
+    "expected_files": [
+      "app/api/payments.py",
+      "app/webhooks/stripe_handler.py"
+    ],
+    "expected_keywords": [
+      "create_payment",
+      "get_payment_status"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_062",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Explain how process_refund works",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/payments.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_files": [
+      "app/api/payments.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "process_refund",
+      "list_transactions"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_063",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "What does get_payment_status do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/payments.py"
+    ],
+    "expected_files": [
+      "app/api/payments.py",
+      "app/utils/currency_converter.py"
+    ],
+    "expected_keywords": [
+      "get_payment_status",
+      "list_transactions"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_064",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "How does list_transactions handle its logic?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/payments.py"
+    ],
+    "expected_files": [
+      "app/api/payments.py",
+      "app/models/transaction.py"
+    ],
+    "expected_keywords": [
+      "list_transactions",
+      "get_payment_status",
+      "create_payment"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_065",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Explain how PaymentService works",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/services/payment_service.py",
+      "app/api/payments.py"
+    ],
+    "expected_files": [
+      "app/services/payment_service.py",
+      "app/api/payments.py"
+    ],
+    "expected_keywords": [
+      "PaymentService",
+      "process_webhook",
+      "validate_payment"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_066",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Find the definition of validate_payment",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/payment_service.py"
+    ],
+    "expected_files": [
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "validate_payment",
+      "process_webhook"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_067",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Where is charge_card implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/payment_service.py"
+    ],
+    "expected_files": [
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "charge_card",
+      "PaymentService"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_068",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Where is process_webhook defined?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/payment_service.py"
+    ],
+    "expected_files": [
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "process_webhook",
+      "charge_card"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_069",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "In which file is Transaction located?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/models/transaction.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_files": [
+      "app/models/transaction.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "Transaction",
+      "RefundRequest",
+      "PaymentMethod"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_070",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Where is PaymentStatus referenced?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/transaction.py"
+    ],
+    "expected_files": [
+      "app/models/transaction.py"
+    ],
+    "expected_keywords": [
+      "PaymentStatus",
+      "PaymentMethod"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_071",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Find all references to PaymentMethod",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/transaction.py"
+    ],
+    "expected_files": [
+      "app/models/transaction.py"
+    ],
+    "expected_keywords": [
+      "PaymentMethod",
+      "Transaction",
+      "PaymentStatus"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_072",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Find all references to RefundRequest",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/models/transaction.py"
+    ],
+    "expected_files": [
+      "app/models/transaction.py"
+    ],
+    "expected_keywords": [
+      "RefundRequest",
+      "PaymentStatus",
+      "Transaction"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_073",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Who calls convert_currency?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/utils/currency_converter.py",
+      "app/webhooks/stripe_handler.py"
+    ],
+    "expected_files": [
+      "app/utils/currency_converter.py",
+      "app/webhooks/stripe_handler.py"
+    ],
+    "expected_keywords": [
+      "convert_currency",
+      "get_exchange_rate",
+      "format_amount"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_074",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Which callers invoke get_exchange_rate?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/utils/currency_converter.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_files": [
+      "app/utils/currency_converter.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "get_exchange_rate",
+      "convert_currency",
+      "format_amount"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "payment_gateway_075",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "What happens if format_amount changes?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/utils/currency_converter.py"
+    ],
+    "expected_files": [
+      "app/utils/currency_converter.py",
+      "app/services/payment_service.py"
+    ],
+    "expected_keywords": [
+      "format_amount",
+      "convert_currency",
+      "get_exchange_rate"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_076",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "What would break if handle_stripe_webhook is removed?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/webhooks/stripe_handler.py",
+      "app/api/payments.py"
+    ],
+    "expected_files": [
+      "app/webhooks/stripe_handler.py",
+      "app/api/payments.py"
+    ],
+    "expected_keywords": [
+      "handle_stripe_webhook",
+      "process_event",
+      "verify_signature"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "payment_gateway_077",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Search for webhook handling in the codebase",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/api/payments.py"
+    ],
+    "expected_files": [
+      "app/api/payments.py"
+    ],
+    "expected_keywords": [
+      "create_payment",
+      "get_payment_status"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "payment_gateway_078",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Search for webhook handling in the codebase",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/models/transaction.py"
+    ],
+    "expected_files": [
+      "app/models/transaction.py"
+    ],
+    "expected_keywords": [
+      "PaymentStatus",
+      "PaymentMethod"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "payment_gateway_079",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "How many functions are in transaction.py?",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "8"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "payment_gateway_080",
+    "repo_id": "payment_gateway",
+    "repo_path": "company_repos/payment_gateway",
+    "question": "Count the number of API endpoints",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "5"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_081",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "What does send_notification do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/notifications.py",
+      "app/services/email_service.py"
+    ],
+    "expected_files": [
+      "app/api/notifications.py",
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "send_notification",
+      "mark_as_read"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_082",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "What does get_notifications do?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/notifications.py"
+    ],
+    "expected_files": [
+      "app/api/notifications.py",
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "get_notifications",
+      "send_notification"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_083",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "What is the purpose of mark_as_read?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/notifications.py",
+      "app/services/push_service.py"
+    ],
+    "expected_files": [
+      "app/api/notifications.py",
+      "app/services/push_service.py"
+    ],
+    "expected_keywords": [
+      "mark_as_read",
+      "delete_notification"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_084",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "How does delete_notification handle its logic?",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/api/notifications.py"
+    ],
+    "expected_files": [
+      "app/api/notifications.py",
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "delete_notification",
+      "mark_as_read",
+      "send_notification"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_085",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Describe what EmailService does step by step",
+    "expected_query_type": "explanation_query",
+    "expected_sources": [
+      "app/services/email_service.py",
+      "app/api/notifications.py"
+    ],
+    "expected_files": [
+      "app/services/email_service.py",
+      "app/api/notifications.py"
+    ],
+    "expected_keywords": [
+      "EmailService",
+      "validate_email",
+      "send_email"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_086",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Find the definition of send_email",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/email_service.py"
+    ],
+    "expected_files": [
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "send_email",
+      "render_template"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_087",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "In which file is render_template located?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/email_service.py",
+      "app/api/notifications.py"
+    ],
+    "expected_files": [
+      "app/services/email_service.py",
+      "app/api/notifications.py"
+    ],
+    "expected_keywords": [
+      "render_template",
+      "send_email"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_088",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Where is validate_email implemented?",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/email_service.py",
+      "app/api/notifications.py"
+    ],
+    "expected_files": [
+      "app/services/email_service.py",
+      "app/api/notifications.py"
+    ],
+    "expected_keywords": [
+      "validate_email",
+      "send_email"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_089",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Find the definition of PushService",
+    "expected_query_type": "location_query",
+    "expected_sources": [
+      "app/services/push_service.py",
+      "app/services/email_service.py"
+    ],
+    "expected_files": [
+      "app/services/push_service.py",
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "PushService",
+      "send_push",
+      "unregister_device"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_090",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Where is send_push referenced?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/services/push_service.py"
+    ],
+    "expected_files": [
+      "app/services/push_service.py"
+    ],
+    "expected_keywords": [
+      "send_push",
+      "register_device"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_091",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Where is register_device used?",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/services/push_service.py"
+    ],
+    "expected_files": [
+      "app/services/push_service.py"
+    ],
+    "expected_keywords": [
+      "register_device",
+      "PushService",
+      "send_push"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_092",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Find all references to unregister_device",
+    "expected_query_type": "reference_query",
+    "expected_sources": [
+      "app/services/push_service.py"
+    ],
+    "expected_files": [
+      "app/services/push_service.py"
+    ],
+    "expected_keywords": [
+      "unregister_device",
+      "register_device",
+      "PushService"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_093",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "What functions call Notification?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/models/notification.py",
+      "app/services/email_service.py"
+    ],
+    "expected_files": [
+      "app/models/notification.py",
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "Notification",
+      "NotificationType",
+      "NotificationChannel"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_094",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Who calls NotificationType?",
+    "expected_query_type": "caller_query",
+    "expected_sources": [
+      "app/models/notification.py"
+    ],
+    "expected_files": [
+      "app/models/notification.py",
+      "app/templates/email_templates.py"
+    ],
+    "expected_keywords": [
+      "NotificationType",
+      "NotificationChannel",
+      "NotificationStatus"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "notification_service_095",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "What would break if NotificationChannel is removed?",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/models/notification.py"
+    ],
+    "expected_files": [
+      "app/models/notification.py",
+      "app/services/email_service.py"
+    ],
+    "expected_keywords": [
+      "NotificationChannel",
+      "NotificationStatus",
+      "Notification"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_096",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Impact analysis for NotificationStatus",
+    "expected_query_type": "impact_query",
+    "expected_sources": [
+      "app/models/notification.py"
+    ],
+    "expected_files": [
+      "app/models/notification.py",
+      "app/services/push_service.py"
+    ],
+    "expected_keywords": [
+      "NotificationStatus",
+      "Notification",
+      "NotificationType"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "notification_service_097",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Show me code about device registration",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/templates/email_templates.py"
+    ],
+    "expected_files": [
+      "app/templates/email_templates.py"
+    ],
+    "expected_keywords": [
+      "ResetPasswordTemplate",
+      "OrderConfirmTemplate"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "id": "notification_service_098",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Find code related to email template",
+    "expected_query_type": "search_query",
+    "expected_sources": [
+      "app/services/push_service.py"
+    ],
+    "expected_files": [
+      "app/services/push_service.py"
+    ],
+    "expected_keywords": [
+      "send_push",
+      "register_device"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "id": "notification_service_099",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "How many Python files are there?",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "3"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "id": "notification_service_100",
+    "repo_id": "notification_service",
+    "repo_path": "company_repos/notification_service",
+    "question": "Count the number of API endpoints",
+    "expected_query_type": "count_query",
+    "expected_sources": [],
+    "expected_files": [],
+    "expected_keywords": [
+      "5"
+    ],
+    "difficulty": "easy"
   }
 ]

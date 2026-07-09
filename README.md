@@ -26,7 +26,7 @@ Agentic Python Repo RAG Copilot is an AI-powered assistant for understanding Pyt
 | Database | Supabase / PostgreSQL + pgvector |
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`, 384-dim) |
 | Reranking | Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) |
-| LLM | Google Gemini (`gemini-2.5-flash`) |
+| LLM | DeepSeek (`deepseek-v4-flash`) |
 | Code Graph | Custom AST-based (Python `ast` module) |
 | BM25 | rank-bm25 |
 | Infrastructure | Docker, Docker Compose |
@@ -366,96 +366,131 @@ The eval suite indexes each repository from scratch, runs all questions through 
 
 ### Benchmark Results
 
-Evaluated on **10 test cases** across **2 company repositories** (`taskflow_api`, `inventory_api`) covering 7 query types. Retrieval mode: **Fast (RRF only)**, LLM router: **enabled**.
+Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api`, `inventory_api`, `auth_service`, `payment_gateway`, `notification_service`) covering 7 query types and 3 difficulty levels. Retrieval mode: **Fast (RRF only)**, LLM: **DeepSeek-v4-flash**, LLM router: **enabled**.
 
 #### Overall Metrics
 
 | Metric | Score |
 |---|---|
-| **Query Type Accuracy** | 80.00% |
-| **Avg Source Recall** | 85.00% |
-| **Expected Sources All Found Rate** | 70.00% |
-| **Avg Source Precision** | 64.45% |
-| **Avg File Hit Rate** | 90.00% |
+| **Query Type Accuracy** | 85.00% |
+| **Avg Source Recall** | 87.00% |
+| **Expected Sources All Found Rate** | 84.00% |
+| **Avg Source Precision** | 59.52% |
+| **Avg File Hit Rate** | 87.00% |
 | **Answer Non-Empty Rate** | 100.00% |
-| **Avg Keyword Recall** | 79.17% |
-| **Avg Citation Validity** | 93.56% |
-| **Avg Latency** | 2.87s |
-| **Router Fallback Rate** | 10.00% |
+| **Avg Keyword Recall** | 76.67% |
+| **Avg Citation Validity** | 91.52% |
+| **Avg Latency** | 2.69s |
+| **Router Fallback Rate** | 3.00% |
 | **LLM Failure Rate** | 0.00% |
 | **Abstention Accuracy** | 100.00% |
 | **Forbidden Keyword Hit Rate** | 0.00% |
 
 ![Overall Evaluation Metrics](docs/images/eval-overall-metrics.png)
 
-#### Per-Case Results
-
-| Case ID | Query Type | Correct | Source Recall | Source Precision | Keyword Recall | Citation Valid | Latency |
-|---|---|---|---|---|---|---|---|
-| `taskflow_01` | explanation | ✅ | 100.0% | 85.7% | 100.0% | 100.0% | 2.41s |
-| `taskflow_02` | location | ✅ | 100.0% | 100.0% | 100.0% | 100.0% | 1.98s |
-| `taskflow_03` | reference | ✅ | 100.0% | 75.0% | 100.0% | 100.0% | 2.15s |
-| `taskflow_04` | caller | ✅ | 100.0% | 80.0% | 100.0% | 85.7% | 3.22s |
-| `taskflow_05` | count | ✅ | 100.0% | 0.0% | 100.0% | 100.0% | 1.53s |
-| `inventory_01` | explanation | ✅ | 100.0% | 85.7% | 75.0% | 100.0% | 2.67s |
-| `inventory_02` | location | ✅ | 50.0% | 66.7% | 100.0% | 85.7% | 2.34s |
-| `inventory_03` | explanation | ✅ | 100.0% | 80.0% | 66.7% | 90.0% | 3.45s |
-| `inventory_04` | impact | ❌ | 100.0% | 71.4% | 50.0% | 85.7% | 4.12s |
-| `inventory_05` | search | ❌ | 0.0% | 0.0% | 0.0% | 88.5% | 4.87s |
-
-> **Note:** Source Recall depends on the number of `expected_sources` in each eval case. Cases with 1 expected source yield 0% or 100%; cases with 2 expected sources can yield 0%, 50%, or 100%. `taskflow_05` has no expected sources (count query), so recall defaults to 100%.
-
-![Per-Case Evaluation Results](docs/images/eval-per-case-heatmap.png)
-
 #### Results by Query Type
 
 | Query Type | Cases | Accuracy | Avg Source Recall | Avg Keyword Recall | Avg Latency |
 |---|---|---|---|---|---|
-| `explanation_query` | 3 | 100.0% | 100.0% | 80.6% | 2.84s |
-| `location_query` | 2 | 100.0% | 75.0% | 100.0% | 2.16s |
-| `reference_query` | 1 | 100.0% | 100.0% | 100.0% | 2.15s |
-| `caller_query` | 1 | 100.0% | 100.0% | 100.0% | 3.22s |
-| `count_query` | 1 | 100.0% | 100.0% | 100.0% | 1.53s |
-| `impact_query` | 1 | 0.0% | 100.0% | 50.0% | 4.12s |
-| `search_query` | 1 | 0.0% | 0.0% | 0.0% | 4.87s |
+| `explanation_query` | 25 | 96.0% | 92.0% | 90.7% | 2.71s |
+| `location_query` | 20 | 90.0% | 97.5% | 87.5% | 2.08s |
+| `reference_query` | 15 | 80.0% | 86.7% | 60.0% | 2.54s |
+| `caller_query` | 10 | 70.0% | 80.0% | 73.3% | 3.29s |
+| `count_query` | 10 | 100.0% | 100.0% | 100.0% | 1.43s |
+| `impact_query` | 10 | 70.0% | 55.0% | 36.7% | 4.12s |
+| `search_query` | 10 | 70.0% | 80.0% | 65.0% | 3.29s |
 
 ![Evaluation Results by Query Type](docs/images/eval-query-type-results.png)
 
 #### Per-Repository Summary
 
-| Repository | Cases | Query Type Acc | Avg Source Recall | Avg Precision | Avg Latency |
-|---|---|---|---|---|---|
-| `taskflow_api` | 5 | 100.0% | 100.0% | 68.1% | 2.26s |
-| `inventory_api` | 5 | 60.0% | 70.0% | 60.8% | 3.49s |
+| Repository | Cases | Query Type Acc | Avg Source Recall | Avg Precision | Avg Keyword Recall | Avg Latency |
+|---|---|---|---|---|---|---|
+| `taskflow_api` | 20 | 85.0% | 72.5% | 46.3% | 67.5% | 2.54s |
+| `inventory_api` | 20 | 80.0% | 90.0% | 55.9% | 71.7% | 2.77s |
+| `auth_service` | 20 | 95.0% | 82.5% | 65.1% | 75.8% | 2.67s |
+| `payment_gateway` | 20 | 95.0% | 100.0% | 65.7% | 87.5% | 2.71s |
+| `notification_service` | 20 | 70.0% | 90.0% | 64.5% | 80.8% | 2.74s |
 
 ![Per-Repository Evaluation Summary](docs/images/eval-repo-summary.png)
+
+#### Results by Difficulty
+
+| Difficulty | Cases | Accuracy | Avg Source Recall | Avg Keyword Recall | Avg Latency |
+|---|---|---|---|---|---|
+| `easy` | 45 | 95.6% | 94.4% | 90.0% | 2.20s |
+| `medium` | 40 | 80.0% | 86.2% | 70.8% | 2.91s |
+| `hard` | 15 | 66.7% | 66.7% | 52.2% | 3.56s |
+
+![Evaluation Results by Difficulty](docs/images/eval-difficulty-results.png)
+
+#### Top 10 Performers
+
+| Case ID | Repository | Query Type | Difficulty | Source Recall | Keyword Recall | Latency |
+|---|---|---|---|---|---|---|
+| `payment_gateway_061` | `payment_gateway` | explanation | easy | 100.0% | 100.0% | 2.19s |
+| `payment_gateway_062` | `payment_gateway` | explanation | easy | 100.0% | 100.0% | 2.51s |
+| `payment_gateway_063` | `payment_gateway` | explanation | easy | 100.0% | 100.0% | 3.25s |
+| `payment_gateway_066` | `payment_gateway` | location | easy | 100.0% | 100.0% | 1.90s |
+| `payment_gateway_070` | `payment_gateway` | reference | easy | 100.0% | 100.0% | 2.01s |
+| `auth_service_045` | `auth_service` | explanation | medium | 100.0% | 100.0% | 2.67s |
+| `auth_service_048` | `auth_service` | location | easy | 100.0% | 100.0% | 1.87s |
+| `auth_service_052` | `auth_service` | reference | medium | 100.0% | 100.0% | 2.59s |
+| `inventory_api_022` | `inventory_api` | explanation | easy | 100.0% | 100.0% | 2.61s |
+| `notification_service_088` | `notification_service` | location | easy | 100.0% | 100.0% | 2.08s |
+
+#### Bottom 10 Performers
+
+| Case ID | Repository | Query Type | Difficulty | Correct | Source Recall | Keyword Recall | Latency |
+|---|---|---|---|---|---|---|---|
+| `taskflow_api_015` | `taskflow_api` | impact | medium | ❌ | 0.0% | 0.0% | 3.36s |
+| `notification_service_091` | `notification_service` | reference | medium | ❌ | 0.0% | 0.0% | 2.39s |
+| `taskflow_api_011` | `taskflow_api` | reference | medium | ✅ | 0.0% | 0.0% | 1.94s |
+| `taskflow_api_014` | `taskflow_api` | caller | hard | ✅ | 0.0% | 0.0% | 3.15s |
+| `taskflow_api_016` | `taskflow_api` | impact | hard | ✅ | 0.0% | 0.0% | 4.52s |
+| `taskflow_api_018` | `taskflow_api` | search | hard | ✅ | 0.0% | 0.0% | 2.70s |
+| `inventory_api_035` | `inventory_api` | impact | medium | ✅ | 0.0% | 0.0% | 4.99s |
+| `inventory_api_038` | `inventory_api` | search | hard | ✅ | 0.0% | 0.0% | 2.95s |
+| `auth_service_043` | `auth_service` | explanation | easy | ✅ | 0.0% | 0.0% | 2.96s |
+| `auth_service_055` | `auth_service` | impact | medium | ✅ | 0.0% | 0.0% | 3.79s |
+
+> **Note:** Source Recall depends on the number of `expected_sources` in each eval case. Cases with 1 expected source yield 0% or 100%; cases with 2 expected sources can yield 0%, 50%, or 100%. `count_query` cases have no expected sources, so recall defaults to 100%.
 
 #### Analysis & Key Observations
 
 **Query Router Performance:**
-The LLM router (Gemini) achieves **80% overall accuracy** (8/10), correctly classifying all common query types: `explanation`, `location`, `reference`, `caller`, and `count`. The two misclassifications occur on `impact_query` and `search_query` — these are semantically ambiguous types where the boundary between "impact analysis" vs "explanation" and "search" vs "reference" is less clear-cut. The **Router Fallback Rate of 10%** indicates the LLM router is generally reliable, with rule-based fallback rarely needed.
+The DeepSeek-v4-flash router achieves **85% overall accuracy** (85/100), demonstrating strong classification ability across 7 query types. High-frequency types like `explanation_query` (96%), `location_query` (90%), and `count_query` (100%) are classified almost flawlessly. The router struggles most with semantically ambiguous types — `impact_query` (70%), `search_query` (70%), and `caller_query` (70%) — where the boundary between "impact analysis" vs "explanation" or "caller" vs "reference" is often unclear from natural language alone. The **Router Fallback Rate of 3%** confirms that DeepSeek-v4-flash is highly reliable as a classification backbone, with rule-based fallback triggered in only 3 of 100 cases.
 
 **Retrieval Quality — Hybrid Strategy Effectiveness:**
-- **Source Recall (85%)** shows the hybrid retrieval (Vector + BM25 + Symbol + Doc → RRF) successfully locates most expected source files. `taskflow_api` achieves perfect 100% recall across all 5 cases thanks to the **symbol matching** strategy. The main weakness is `inventory_05` (`search_query` for "restock") where retrieval failed entirely — BM25 and vector search missed the `needs_restock` method because the query term "restock" differs from the actual symbol name
-- **Source Precision (64.5%)** indicates noticeable noise in retrieved results — the system returns extra sources beyond what's strictly expected. This is a known trade-off: RRF fusion favors recall over precision, and the hybrid approach sometimes surfaces loosely related chunks. Note: `count_query` and `search_query` cases contribute 0% precision (no matched sources), which lowers the overall average
-- **File Hit Rate (90%)** confirms the retrieval pipeline surfaces the correct files even when exact source matching is imperfect
+- **Source Recall (87%)** demonstrates that the hybrid retrieval pipeline (Vector + BM25 + Symbol + Doc → RRF) successfully locates the expected source files in the majority of cases. `payment_gateway` achieves a perfect 100% recall, likely due to its well-structured codebase with clear function naming. In contrast, `taskflow_api` (72.5%) shows the lowest recall — closer inspection reveals that several `caller_query` and `impact_query` cases fail because these queries require graph traversal to discover indirect callers, which the current RRF-only mode does not fully leverage
+- **Source Precision (59.5%)** reflects a known trade-off of the RRF fusion strategy: by merging results from 4 retrieval sources (Vector, BM25, Symbol, Doc), the system prioritizes comprehensive recall at the expense of precision. The `count_query` cases contribute 0% precision (no actual sources returned for count questions), which further lowers the aggregate
+- **File Hit Rate (87%)** confirms that even when exact source matching fails, the retrieval pipeline still surfaces the correct files — suggesting that the hybrid approach effectively covers different retrieval modalities
 
 **Answer Generation Quality:**
-- **Keyword Recall (79.2%)** shows the LLM (Gemini) covers most expected concepts in its answers, though there is room for improvement. The complete miss on `inventory_05` (0% keyword recall) directly follows from the retrieval failure — with no relevant sources retrieved, the LLM cannot produce an answer containing the expected keywords (`needs_restock`, `reorder_threshold`). Cases like `inventory_04` (50%) show that even when sources are found, the LLM may not always mention all expected technical terms
-- **Citation Validity (93.6%)** is high, meaning nearly all source citations point to real files with valid line ranges — this validates the grounded generation approach where the LLM is constrained to cite from retrieved chunks
-- **Answer Non-Empty Rate (100%)** and **LLM Failure Rate (0%)** confirm robust end-to-end generation
+- **Keyword Recall (76.7%)** indicates that DeepSeek-v4-flash covers most expected concepts in its generated answers, but there is a clear performance gradient by difficulty: `easy` cases achieve 90% keyword recall vs `hard` cases at only 52.2%. The weakest area is `impact_query` (36.7% avg keyword recall) where the model must reason about downstream effects — a task that requires deep understanding of code dependencies
+- **Citation Validity (91.5%)** is high across all repositories, validating the grounded generation approach where the LLM is constrained to cite only from retrieved chunks. The remaining 8.5% invalid citations are typically caused by line range drift (the model cites slightly incorrect line numbers within the correct file)
+- **Answer Non-Empty Rate (100%)** and **LLM Failure Rate (0%)** confirm that DeepSeek-v4-flash produces consistent, non-empty responses across all 100 cases with zero generation failures
 
 **Safety & Guardrails:**
-- **Abstention Accuracy (100%)**: The system correctly abstains from answering when the context is insufficient or when explicitly prompted with out-of-scope questions, preventing harmful hallucinations.
-- **Forbidden Keyword Hit Rate (0%)**: The LLM successfully avoids using any restricted or deprecated terms, adhering strictly to the coding standards and guardrails defined in the system prompt.
+- **Abstention Accuracy (100%)**: The system correctly abstains from answering when the context is insufficient, preventing harmful hallucinations
+- **Forbidden Keyword Hit Rate (0%)**: DeepSeek-v4-flash successfully avoids using any restricted or deprecated terms, adhering strictly to the coding standards defined in the system prompt
+
+**Difficulty Analysis:**
+Performance degrades gracefully with increasing difficulty:
+- **Easy** (45 cases): 95.6% accuracy, 94.4% recall, 2.20s avg latency — the system handles straightforward questions about function definitions and locations with near-perfect accuracy
+- **Medium** (40 cases): 80.0% accuracy, 86.2% recall, 2.91s avg latency — slight degradation on questions requiring cross-file reasoning (e.g., `caller_query`, `reference_query`)
+- **Hard** (15 cases): 66.7% accuracy, 66.7% recall, 3.56s avg latency — significant drop on complex queries requiring graph traversal (`impact_query`) or semantic matching with non-obvious terms (`search_query` for conceptual rather than literal matches)
+
+This gradient is expected and healthy — it shows the system is not overfitting to simple cases while still providing useful answers on harder questions.
 
 **Latency Profile:**
-- Simple queries (`count_query`: 1.53s, `location_query`: 1.98s) are fast because they use direct DB lookups or symbol matching with minimal retrieval overhead
-- Complex queries (`impact_query`: 4.12s, `search_query`: 4.87s) are slower due to graph traversal and broader retrieval scope
-- Average latency of **2.87s** is acceptable for an interactive copilot, and could be further reduced by switching to the **Fast retrieval mode** (RRF-only, skipping Cross-Encoder reranking)
+- `count_query` (1.43s avg) is fastest because it uses direct database aggregation without retrieval
+- `location_query` (2.08s) and `reference_query` (2.54s) are moderately fast, leveraging symbol matching for direct lookups
+- `impact_query` (4.12s) is slowest due to graph traversal and broader retrieval scope
+- Overall **2.69s average** is well within acceptable interactive response times for a code copilot
 
 **Per-Repository Comparison:**
-`taskflow_api` (100% query type accuracy, 100% recall) significantly outperforms `inventory_api` (60% accuracy, 70% recall). This is expected because `taskflow_api` has a simpler code structure with clearer function naming conventions, making both routing and retrieval more straightforward. The `inventory_api` contains more complex domain logic (restock thresholds, stock updates) and the more difficult query types (`impact_query`, `search_query`), which challenge both the router's classification ability and the retriever's semantic understanding.
+`payment_gateway` leads with 95% accuracy and 100% recall, benefiting from clean code structure and explicit function naming. `auth_service` also performs well (95% accuracy) thanks to well-documented authentication patterns. `notification_service` has the lowest accuracy (70%) — this repository contains more complex multi-service interactions (email + push + device registration) that challenge both the router's classification and the retriever's ability to identify relevant sources across multiple service files.
 
 ---
 
