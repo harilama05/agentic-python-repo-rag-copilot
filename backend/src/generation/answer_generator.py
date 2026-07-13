@@ -5,14 +5,14 @@ answering step reusable from the agent and future API services.
 """
 
 from src.generation.context_builder import build_generation_context
-from src.generation.llm import GeminiLLM
+from src.generation.llm import BaseLLM
 from src.generation.prompts import SYSTEM_PROMPT, build_grounded_user_prompt
 
 
 class GroundedAnswerGenerator:
     """Generate grounded answers from agent results using an LLM."""
 
-    def __init__(self, llm: GeminiLLM):
+    def __init__(self, llm: BaseLLM):
         self.llm = llm
 
     def generate(

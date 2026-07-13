@@ -22,7 +22,7 @@ from src.core.constants import (
     QUERY_TYPE_SEARCH,
 )
 from src.generation.answer_generator import GroundedAnswerGenerator
-from src.generation.llm import GeminiLLM
+from src.generation.llm import BaseLLM
 from src.core.settings import DOCUMENTATION_TOP_K, DEFAULT_TOP_K, FALLBACK_SEARCH_TOP_K
 
 
@@ -33,7 +33,7 @@ class CodebaseAgent:
         self,
         tools: CodebaseTools,
         query_router: LLMQueryRouter,
-        llm: Optional[GeminiLLM] = None,
+        llm: Optional[BaseLLM] = None,
         use_llm: bool = False,
         answer_generator: GroundedAnswerGenerator | None = None,
     ):

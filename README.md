@@ -40,7 +40,7 @@ Agentic Python Repo RAG Copilot is an AI-powered assistant for understanding Pyt
 - Hybrid retrieval: vector search (pgvector) + BM25 + symbol matching + documentation search, merged via Reciprocal Rank Fusion (RRF)
 - Two retrieval modes: Fast (RRF only) and Accurate (RRF + Cross-Encoder reranking)
 - Custom AST-based Code Graph RAG with callers, callees, impact analysis, and flow tracing
-- LLM query router/planner (Gemini) with fallback rule-based routing, supporting 11 query types
+- LLM query router/planner (Gemini/DeepSeek) with fallback rule-based routing, supporting 10 query types
 - Multi-format indexing: Python (.py), Markdown (.md), JSON (.json), TXT (.txt)
 - Three repository types: persistent company repos, temporary GitHub repos, temporary ZIP uploads
 - DB-only runtime — after indexing, the backend reads only from PostgreSQL
@@ -154,7 +154,7 @@ At query time, the agent uses graph tools for structural queries:
 
 ### LLM Query Router
 
-Each user question is classified into one of **11 query types** before retrieval. The system uses a **two-tier routing** strategy:
+Each user question is classified into one of **10 query types** before retrieval. The system uses a **two-tier routing** strategy:
 
 1. **LLM Router (primary)** — sends the question to Gemini with a structured prompt, asking it to classify the query type and extract key entities (function names, class names, keywords)
 2. **Rule-based Router (fallback)** — if the LLM router fails or is disabled, a regex/keyword-based classifier handles routing (e.g., questions starting with "Where is" → `location_query`, "Who calls" → `caller_query`)
@@ -318,7 +318,6 @@ The agent supports the following query types, classified by the LLM router or fa
 | `impact_query` | Impact of changing a function | "What is affected if create_task changes?" |
 | `flow_query` | Trace execution flow | "Trace the flow of create_task" |
 | `count_query` | Count files/functions/classes | "How many Python files?" |
-| `multi_intent_query` | Combined questions | "Where is create_task and who calls it?" |
 
 ---
 

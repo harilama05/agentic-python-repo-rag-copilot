@@ -26,7 +26,7 @@ from src.core.constants import (
 )
 from src.core.settings import RETRIEVAL_MODE_FAST
 from src.generation.answer_generator import GroundedAnswerGenerator
-from src.generation.llm import GeminiLLM
+from src.generation.llm import BaseLLM, get_llm
 from src.graph.code_graph import build_code_graph
 from src.indexing.models import IndexedCodebase
 from src.ingestion.scanner import scan_json_files, scan_python_files, scan_text_files
@@ -109,13 +109,13 @@ def count_ignored_files(repo_path: str | Path) -> int:
     return ignored_count
 
 
-def build_optional_llm(enabled: bool) -> GeminiLLM | None:
-    """Build an optional Gemini client with graceful fallback to None."""
+def build_optional_llm(enabled: bool) -> BaseLLM | None:
+    """Build an optional LLM client with graceful fallback to None."""
     if not enabled:
         return None
 
     try:
-        return GeminiLLM()
+        return get_llm()
     except Exception:
         return None
 

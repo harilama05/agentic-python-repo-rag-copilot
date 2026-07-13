@@ -22,7 +22,7 @@ from src.core.constants import (
     QUERY_TYPE_SEARCH,
     QUERY_TYPE_COUNT,
 )
-from src.generation.llm import GeminiLLM
+from src.generation.llm import BaseLLM
 
 
 ALLOWED_QUERY_TYPES = {
@@ -520,7 +520,7 @@ def rule_based_fallback_route(question: str) -> QueryPlan:
 class LLMQueryRouter:
     """Main query planner used by the agent runtime."""
 
-    def __init__(self, llm: Optional[GeminiLLM] = None):
+    def __init__(self, llm: Optional[BaseLLM] = None):
         self.llm = llm
 
     def route(self, question: str) -> QueryPlan:
