@@ -35,7 +35,7 @@ services:
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-      LLM_BACKEND: ${LLM_BACKEND:-gemini}
+      LLM_BACKEND: ${LLM_BACKEND:-deepseek}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8501}
     ports:
       - "8000:8000"
@@ -62,7 +62,7 @@ services:
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-      LLM_BACKEND: ${LLM_BACKEND:-gemini}
+      LLM_BACKEND: ${LLM_BACKEND:-deepseek}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8501}
     ports:
       - "8501:8501"

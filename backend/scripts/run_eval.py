@@ -65,7 +65,7 @@ def build_indexed_repos(cases):
             repo_path=repo_path,
             collection_name=f"eval_{repo_id}",
             reset_collection=True,
-            use_llm=False,
+            use_llm=True,
             retrieval_mode=RETRIEVAL_MODE_FAST,
             use_llm_router=True,
             save_metadata=False,
