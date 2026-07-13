@@ -26,7 +26,7 @@ Agentic Python Repo RAG Copilot is an AI-powered assistant for understanding Pyt
 | Database | Supabase / PostgreSQL + pgvector |
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`, 384-dim) |
 | Reranking | Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) |
-| LLM | DeepSeek (`deepseek-v4-flash`) |
+| LLM | DeepSeek (`deepseek-chat`) |
 | Code Graph | Custom AST-based (Python `ast` module) |
 | BM25 | rank-bm25 |
 | Infrastructure | Docker, Docker Compose |
@@ -177,7 +177,7 @@ agentic-python-repo-rag-copilot/
 │   │   ├── db/                 # SQLAlchemy session + models
 │   │   ├── embeddings/         # sentence-transformers wrapper
 │   │   ├── evaluation/         # Eval runner + metrics
-│   │   ├── generation/         # Gemini LLM answer generation
+│   │   ├── generation/         # DeepSeek/Gemini LLM answer generation
 │   │   ├── graph/              # AST-based code graph builder
 │   │   ├── indexing/           # Full indexing pipeline
 │   │   ├── ingestion/          # GitHub clone + ZIP extraction
@@ -204,9 +204,11 @@ All variables are set in `backend/.env`. See `backend/.env.example` for a templa
 
 | Variable | Required | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Yes | Google Gemini API key |
+| `LLM_BACKEND` | No | `deepseek` or `gemini` (default: `deepseek`) |
+| `DEEPSEEK_API_KEY` | If DeepSeek | DeepSeek API key |
+| `DEEPSEEK_MODEL` | No | Default: `deepseek-chat` |
+| `GEMINI_API_KEY` | If Gemini | Google Gemini API key |
 | `GEMINI_MODEL` | No | Gemini model name (default: `gemini-2.5-flash`) |
-| `LLM_BACKEND` | No | LLM backend to use (default: `gemini`) |
 | `DATABASE_URL` | Yes | PostgreSQL connection string with `psycopg` driver |
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_KEY` | Yes | Supabase publishable API key |
@@ -221,7 +223,7 @@ All variables are set in `backend/.env`. See `backend/.env.example` for a templa
 
 - Docker Desktop
 - Supabase/PostgreSQL database URL
-- Gemini API key
+- DeepSeek API key (or Gemini API key)
 
 ### 1. Create backend environment file
 
@@ -365,7 +367,7 @@ The eval suite indexes each repository from scratch, runs all questions through 
 
 ### Benchmark Results
 
-Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api`, `inventory_api`, `auth_service`, `payment_gateway`, `notification_service`) covering 7 query types and 3 difficulty levels. Retrieval mode: **Fast (RRF only)**, LLM: **DeepSeek-v4-flash**, LLM router: **enabled**.
+Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api`, `inventory_api`, `auth_service`, `payment_gateway`, `notification_service`) covering 7 query types and 3 difficulty levels. Retrieval mode: **Fast (RRF only)**, LLM: **deepseek-chat**, LLM router: **enabled**.
 
 #### Overall Metrics
 
@@ -458,7 +460,7 @@ Evaluated on **100 test cases** across **5 company repositories** (`taskflow_api
 #### Analysis & Key Observations
 
 **Query Router Performance:**
-The DeepSeek-v4-flash router achieves **85% overall accuracy** (85/100), demonstrating strong classification ability across 7 query types. High-frequency types like `explanation_query` (96%), `location_query` (90%), and `count_query` (100%) are classified almost flawlessly. The router struggles most with semantically ambiguous types — `impact_query` (70%), `search_query` (70%), and `caller_query` (70%) — where the boundary between "impact analysis" vs "explanation" or "caller" vs "reference" is often unclear from natural language alone. The **Router Fallback Rate of 3%** confirms that DeepSeek-v4-flash is highly reliable as a classification backbone, with rule-based fallback triggered in only 3 of 100 cases.
+The deepseek-chat router achieves **85% overall accuracy** (85/100), demonstrating strong classification ability across 7 query types. High-frequency types like `explanation_query` (96%), `location_query` (90%), and `count_query` (100%) are classified almost flawlessly. The router struggles most with semantically ambiguous types — `impact_query` (70%), `search_query` (70%), and `caller_query` (70%) — where the boundary between "impact analysis" vs "explanation" or "caller" vs "reference" is often unclear from natural language alone. The **Router Fallback Rate of 3%** confirms that deepseek-chat is highly reliable as a classification backbone, with rule-based fallback triggered in only 3 of 100 cases.
 
 **Retrieval Quality — Hybrid Strategy Effectiveness:**
 - **Source Recall (87%)** demonstrates that the hybrid retrieval pipeline (Vector + BM25 + Symbol + Doc → RRF) successfully locates the expected source files in the majority of cases. `payment_gateway` achieves a perfect 100% recall, likely due to its well-structured codebase with clear function naming. In contrast, `taskflow_api` (72.5%) shows the lowest recall — closer inspection reveals that several `caller_query` and `impact_query` cases fail because these queries require graph traversal to discover indirect callers, which the current RRF-only mode does not fully leverage
@@ -466,13 +468,13 @@ The DeepSeek-v4-flash router achieves **85% overall accuracy** (85/100), demonst
 - **File Hit Rate (87%)** confirms that even when exact source matching fails, the retrieval pipeline still surfaces the correct files — suggesting that the hybrid approach effectively covers different retrieval modalities
 
 **Answer Generation Quality:**
-- **Keyword Recall (76.7%)** indicates that DeepSeek-v4-flash covers most expected concepts in its generated answers, but there is a clear performance gradient by difficulty: `easy` cases achieve 90% keyword recall vs `hard` cases at only 52.2%. The weakest area is `impact_query` (36.7% avg keyword recall) where the model must reason about downstream effects — a task that requires deep understanding of code dependencies
+- **Keyword Recall (76.7%)** indicates that deepseek-chat covers most expected concepts in its generated answers, but there is a clear performance gradient by difficulty: `easy` cases achieve 90% keyword recall vs `hard` cases at only 52.2%. The weakest area is `impact_query` (36.7% avg keyword recall) where the model must reason about downstream effects — a task that requires deep understanding of code dependencies
 - **Citation Validity (91.5%)** is high across all repositories, validating the grounded generation approach where the LLM is constrained to cite only from retrieved chunks. The remaining 8.5% invalid citations are typically caused by line range drift (the model cites slightly incorrect line numbers within the correct file)
-- **Answer Non-Empty Rate (100%)** and **LLM Failure Rate (0%)** confirm that DeepSeek-v4-flash produces consistent, non-empty responses across all 100 cases with zero generation failures
+- **Answer Non-Empty Rate (100%)** and **LLM Failure Rate (0%)** confirm that deepseek-chat produces consistent, non-empty responses across all 100 cases with zero generation failures
 
 **Safety & Guardrails:**
 - **Abstention Accuracy (100%)**: The system correctly abstains from answering when the context is insufficient, preventing harmful hallucinations
-- **Forbidden Keyword Hit Rate (0%)**: DeepSeek-v4-flash successfully avoids using any restricted or deprecated terms, adhering strictly to the coding standards defined in the system prompt
+- **Forbidden Keyword Hit Rate (0%)**: deepseek-chat successfully avoids using any restricted or deprecated terms, adhering strictly to the coding standards defined in the system prompt
 
 **Difficulty Analysis:**
 Performance degrades gracefully with increasing difficulty:

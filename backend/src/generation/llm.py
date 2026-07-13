@@ -43,7 +43,7 @@ class DeepSeekLLM(BaseLLM):
             "temperature": 0.0
         }
         
-        response = requests.post(self.base_url, headers=headers, json=data)
+        response = requests.post(self.base_url, headers=headers, json=data, timeout=60)
         response.raise_for_status()
         result = response.json()
         return result["choices"][0]["message"]["content"].strip()
@@ -81,8 +81,16 @@ class GeminiLLM(BaseLLM):
 def get_llm() -> BaseLLM:
     """Factory function to get the configured LLM backend."""
     load_dotenv()
-    backend = os.getenv("LLM_BACKEND", "deepseek").lower()
+    backend = os.getenv("LLM_BACKEND", "deepseek").strip().lower()
+    
+    if backend == "deepseek":
+        return DeepSeekLLM()
+        
     if backend == "gemini":
         return GeminiLLM()
-    return DeepSeekLLM()
+        
+    raise ValueError(
+        f"Unsupported LLM_BACKEND={backend!r}. "
+        "Expected 'deepseek' or 'gemini'."
+    )
 

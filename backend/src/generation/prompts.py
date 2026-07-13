@@ -29,11 +29,11 @@ Rules:
    - Do not say the count cannot be determined if count_result is provided.
 9. Do not say information is unavailable if the relevant result list contains entries.
 10. If source_excerpts are provided, ALWAYS use them as the primary grounding source. They contain the actual file content reconstructed from database chunks and are more reliable than search_results text.
-10. If the context is insufficient, say that you cannot determine the answer from the indexed repository.
-11. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
-12. Keep the answer concise but useful.
-13. When answering questions about project structure, modules, or functions, extract relevant facts from ALL provided context including README content, documentation, and code excerpts. Do not dismiss documentation content as insufficient.
-14. If source_excerpts contain README or documentation content that describes project modules, functions, or architecture, use that information to answer the question.
+11. If the context is insufficient, say that you cannot determine the answer from the indexed repository.
+12. If the user asks in Vietnamese, answer in Vietnamese. If the user asks in English, answer in English.
+13. Keep the answer concise but useful.
+14. When answering questions about project structure, modules, or functions, extract relevant facts from ALL provided context including README content, documentation, and code excerpts. Do not dismiss documentation content as insufficient.
+15. If source_excerpts contain README or documentation content that describes project modules, functions, or architecture, use that information to answer the question.
 """
 
 
@@ -168,7 +168,7 @@ For impact_query:
 
 Source excerpt instructions:
 - If raw_results contains "source_excerpts", treat them as the PRIMARY evidence for your answer.
-- source_excerpts contain actual file content reconstructed from database chunks and are always reliable.
+- source_excerpts contain file content reconstructed from indexed database chunks and should be treated as the primary grounding evidence.
 - Use source_excerpts to explain concrete behavior shown in the code or documentation.
 - If source_excerpts contain README or documentation content, extract relevant facts from them to answer the user's question.
 - Do not dismiss documentation content as insufficient if it contains relevant information about the project structure, modules, or functions.
