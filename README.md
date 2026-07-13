@@ -495,6 +495,14 @@ This gradient is expected and healthy — it shows the system is not overfitting
 
 ---
 
+## Limitations
+
+- **AST Resolution Limits:** The Code Graph relies on static AST parsing. It cannot accurately map dynamic imports, runtime reflections, or cross-language dependencies (e.g., Python calling a C++ extension).
+- **Single-turn Context:** The current agent handles one-shot codebase queries excellently but does not maintain conversational memory for multi-turn follow-up queries without re-supplying context.
+- **RRF Precision Trade-off:** Reciprocal Rank Fusion (RRF) aggressively retrieves chunks across multiple vector and lexical sources. This guarantees high source recall (87%) but limits precision (59.5%), increasing token usage.
+
+---
+
 ## Deployment
 
 ### Backend: Render
