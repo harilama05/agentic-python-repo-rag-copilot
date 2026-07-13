@@ -495,11 +495,17 @@ This gradient is expected and healthy — it shows the system is not overfitting
 
 ---
 
-## Limitations
+## Known Limitations
 
-- **AST Resolution Limits:** The Code Graph relies on static AST parsing. It cannot accurately map dynamic imports, runtime reflections, or cross-language dependencies (e.g., Python calling a C++ extension).
-- **Single-turn Context:** The current agent handles one-shot codebase queries excellently but does not maintain conversational memory for multi-turn follow-up queries without re-supplying context.
-- **RRF Precision Trade-off:** Reciprocal Rank Fusion (RRF) aggressively retrieves chunks across multiple vector and lexical sources. This guarantees high source recall (87%) but limits precision (59.5%), increasing token usage.
+- **Python-focused structural analysis:** The code graph is built using Python's `ast` module, so caller, callee, and impact analysis currently work mainly for Python repositories.
+
+- **Static analysis is approximate:** Dynamic calls, dependency injection, reflection, decorators, and complex inheritance may not be fully resolved. Therefore, impact results should be interpreted as potential rather than guaranteed dependencies.
+
+- **Retrieval may include noisy context:** The system prioritizes source recall, which helps reduce missed evidence but may return additional irrelevant chunks, especially for broad or complex queries.
+
+- **Evaluation coverage is limited:** The current benchmark contains 100 queries across 5 repositories and does not fully cover every supported query type or large-scale production codebases.
+
+- **Indexed data can become stale:** Chat runtime reads repository data from PostgreSQL, so repositories must be re-indexed after source-code changes.
 
 ---
 
