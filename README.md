@@ -66,7 +66,7 @@ flowchart TB
     end
 
     PG[("Supabase / PostgreSQL\n+ pgvector")]
-    LLM["Gemini LLM"]
+    LLM["Configured LLM<br>(DeepSeek / Gemini)"]
     Resp["Answer + Sources + Warnings"]
 
     User --> FE --> API --> Router
@@ -103,7 +103,7 @@ flowchart LR
     H --> RRF["RRF Fusion"]
     RRF --> RE{"Accurate\nmode?"}
     RE -- Yes --> CR["Cross-Encoder\nReranking"]
-    RE -- No --> LLM["Gemini LLM"]
+    RE -- No --> LLM["Configured LLM<br>(DeepSeek / Gemini)"]
     CR --> LLM
     LLM --> A2["Answer + Sources"]
 ```
@@ -156,7 +156,7 @@ At query time, the agent uses graph tools for structural queries:
 
 Each user question is classified into one of **10 query types** before retrieval. The system uses a **two-tier routing** strategy:
 
-1. **LLM Router (primary)** — sends the question to Gemini with a structured prompt, asking it to classify the query type and extract key entities (function names, class names, keywords)
+1. **LLM Router (primary)** - sends the question to the configured LLM provider with a structured prompt, asking it to classify the query type and extract key entities (function names, class names, keywords)
 2. **Rule-based Router (fallback)** — if the LLM router fails or is disabled, a regex/keyword-based classifier handles routing (e.g., questions starting with "Where is" → `location_query`, "Who calls" → `caller_query`)
 
 The router output determines which **agent tools** are invoked: hybrid retrieval for semantic queries, graph tools for structural queries, or DB tools for count/reference queries.
