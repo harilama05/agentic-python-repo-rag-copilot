@@ -17,7 +17,8 @@
       "create_task",
       "delete_task"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_002",
@@ -37,7 +38,8 @@
       "update_task",
       "create_task"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_003",
@@ -56,7 +58,8 @@
       "delete_task",
       "create_task"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_004",
@@ -77,7 +80,8 @@
       "create_task",
       "delete_task"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_005",
@@ -97,7 +101,8 @@
       "delete_task",
       "create_task"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_006",
@@ -117,7 +122,8 @@
       "TaskService",
       "assign_task"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_007",
@@ -135,7 +141,8 @@
       "validate_task",
       "assign_task"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_008",
@@ -153,7 +160,8 @@
       "assign_task",
       "TaskService"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_009",
@@ -174,7 +182,8 @@
       "TaskService",
       "validate_task"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_010",
@@ -192,7 +201,8 @@
       "TaskModel",
       "TaskPriority"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_011",
@@ -211,7 +221,8 @@
       "TaskPriority",
       "TaskModel"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_012",
@@ -230,7 +241,8 @@
       "TaskModel",
       "TaskStatus"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_013",
@@ -251,7 +263,8 @@
       "validate_deadline",
       "sanitize_input"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_014",
@@ -271,7 +284,8 @@
       "sanitize_input",
       "validate_task_input"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_015",
@@ -291,7 +305,8 @@
       "validate_deadline",
       "validate_task_input"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_016",
@@ -310,7 +325,8 @@
       "Settings",
       "get_settings"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_017",
@@ -328,7 +344,8 @@
       "Settings",
       "get_settings"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_018",
@@ -346,33 +363,32 @@
       "delete_task",
       "get_task_by_id"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "taskflow_api_019",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
-    "question": "How many Python files are there?",
-    "expected_query_type": "count_query",
+    "question": "How does this project connect to a Redis cache?",
+    "expected_query_type": "explanation_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "4"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "medium",
+    "requires_abstention": true
   },
   {
     "id": "taskflow_api_020",
     "repo_id": "taskflow_api",
     "repo_path": "company_repos/taskflow_api",
-    "question": "How many classes are defined?",
-    "expected_query_type": "count_query",
+    "question": "Where is the GraphQL schema defined?",
+    "expected_query_type": "location_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "4"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "medium",
+    "requires_abstention": true
   },
   {
     "id": "inventory_api_021",
@@ -392,7 +408,8 @@
       "create_item",
       "delete_item"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_022",
@@ -411,7 +428,8 @@
       "update_stock",
       "list_items"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_023",
@@ -431,7 +449,8 @@
       "get_item",
       "delete_item"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_024",
@@ -452,7 +471,8 @@
       "update_stock",
       "get_item"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_025",
@@ -473,7 +493,8 @@
       "create_item",
       "list_items"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_026",
@@ -493,7 +514,8 @@
       "InventoryService",
       "release_stock"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_027",
@@ -511,7 +533,8 @@
       "check_availability",
       "release_stock"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_028",
@@ -529,7 +552,8 @@
       "reserve_stock",
       "release_stock"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_029",
@@ -550,7 +574,8 @@
       "reserve_stock",
       "check_availability"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_030",
@@ -568,7 +593,8 @@
       "InventoryItem",
       "StockLevel"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_031",
@@ -587,7 +613,8 @@
       "needs_restock",
       "InventoryItem"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_032",
@@ -606,7 +633,8 @@
       "InventoryItem",
       "StockLevel"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_033",
@@ -627,7 +655,8 @@
       "InventoryItem",
       "StockLevel"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_034",
@@ -647,7 +676,8 @@
       "forecast_demand",
       "safety_stock"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_035",
@@ -667,7 +697,8 @@
       "safety_stock",
       "calculate_reorder_point"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_036",
@@ -687,7 +718,8 @@
       "calculate_reorder_point",
       "forecast_demand"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_037",
@@ -705,7 +737,8 @@
       "InventoryConfig",
       "get_warehouse_settings"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_038",
@@ -723,33 +756,32 @@
       "reserve_stock",
       "release_stock"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "inventory_api_039",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "Count the number of API endpoints",
-    "expected_query_type": "count_query",
+    "question": "Explain the machine learning model used for demand prediction",
+    "expected_query_type": "explanation_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "4"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "hard",
+    "requires_abstention": true
   },
   {
     "id": "inventory_api_040",
     "repo_id": "inventory_api",
     "repo_path": "company_repos/inventory_api",
-    "question": "How many functions are in config.py?",
-    "expected_query_type": "count_query",
+    "question": "Where is the payment processing logic implemented?",
+    "expected_query_type": "location_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "8"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "medium",
+    "requires_abstention": true
   },
   {
     "id": "auth_service_041",
@@ -769,7 +801,8 @@
       "login",
       "refresh_token"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_042",
@@ -788,7 +821,8 @@
       "register",
       "logout"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_043",
@@ -807,7 +841,8 @@
       "logout",
       "register"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_044",
@@ -827,7 +862,8 @@
       "login",
       "verify_email"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_045",
@@ -848,7 +884,8 @@
       "login",
       "logout"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_046",
@@ -866,7 +903,8 @@
       "AuthService",
       "create_access_token"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_047",
@@ -884,7 +922,8 @@
       "authenticate_user",
       "hash_password"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_048",
@@ -902,7 +941,8 @@
       "create_access_token",
       "authenticate_user"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_049",
@@ -921,7 +961,8 @@
       "AuthService",
       "authenticate_user"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_050",
@@ -939,7 +980,8 @@
       "UserModel",
       "UserSession"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_051",
@@ -958,7 +1000,8 @@
       "UserSession",
       "UserModel"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_052",
@@ -977,7 +1020,8 @@
       "UserModel",
       "UserRole"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_053",
@@ -998,7 +1042,8 @@
       "decode_token",
       "token_required"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_054",
@@ -1019,7 +1064,8 @@
       "JWTHandler",
       "verify_token"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_055",
@@ -1039,7 +1085,8 @@
       "JWTHandler",
       "decode_token"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_056",
@@ -1060,7 +1107,8 @@
       "verify_token",
       "JWTHandler"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_057",
@@ -1078,7 +1126,8 @@
       "hash_password",
       "authenticate_user"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_058",
@@ -1096,33 +1145,32 @@
       "JWTHandler",
       "token_required"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "auth_service_059",
     "repo_id": "auth_service",
     "repo_path": "company_repos/auth_service",
-    "question": "How many Python files are there?",
-    "expected_query_type": "count_query",
+    "question": "Explain the OAuth2 Google sign-in flow in this project",
+    "expected_query_type": "explanation_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "6"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "hard",
+    "requires_abstention": true
   },
   {
     "id": "auth_service_060",
     "repo_id": "auth_service",
     "repo_path": "company_repos/auth_service",
-    "question": "Count the number of API endpoints",
-    "expected_query_type": "count_query",
+    "question": "Where is the SAML integration configured?",
+    "expected_query_type": "location_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "5"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "hard",
+    "requires_abstention": true
   },
   {
     "id": "payment_gateway_061",
@@ -1141,7 +1189,8 @@
       "create_payment",
       "get_payment_status"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_062",
@@ -1161,7 +1210,8 @@
       "process_refund",
       "list_transactions"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_063",
@@ -1180,7 +1230,8 @@
       "get_payment_status",
       "list_transactions"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_064",
@@ -1200,7 +1251,8 @@
       "get_payment_status",
       "create_payment"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_065",
@@ -1221,7 +1273,8 @@
       "process_webhook",
       "validate_payment"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_066",
@@ -1239,7 +1292,8 @@
       "validate_payment",
       "process_webhook"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_067",
@@ -1257,7 +1311,8 @@
       "charge_card",
       "PaymentService"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_068",
@@ -1275,7 +1330,8 @@
       "process_webhook",
       "charge_card"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_069",
@@ -1296,7 +1352,8 @@
       "RefundRequest",
       "PaymentMethod"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_070",
@@ -1314,7 +1371,8 @@
       "PaymentStatus",
       "PaymentMethod"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_071",
@@ -1333,7 +1391,8 @@
       "Transaction",
       "PaymentStatus"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_072",
@@ -1352,7 +1411,8 @@
       "PaymentStatus",
       "Transaction"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_073",
@@ -1373,7 +1433,8 @@
       "get_exchange_rate",
       "format_amount"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_074",
@@ -1394,7 +1455,8 @@
       "convert_currency",
       "format_amount"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_075",
@@ -1414,7 +1476,8 @@
       "convert_currency",
       "get_exchange_rate"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_076",
@@ -1435,7 +1498,8 @@
       "process_event",
       "verify_signature"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_077",
@@ -1453,7 +1517,8 @@
       "create_payment",
       "get_payment_status"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_078",
@@ -1471,33 +1536,32 @@
       "PaymentStatus",
       "PaymentMethod"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "payment_gateway_079",
     "repo_id": "payment_gateway",
     "repo_path": "company_repos/payment_gateway",
-    "question": "How many functions are in transaction.py?",
-    "expected_query_type": "count_query",
+    "question": "How does the cryptocurrency payment module work?",
+    "expected_query_type": "explanation_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "8"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "hard",
+    "requires_abstention": true
   },
   {
     "id": "payment_gateway_080",
     "repo_id": "payment_gateway",
     "repo_path": "company_repos/payment_gateway",
-    "question": "Count the number of API endpoints",
-    "expected_query_type": "count_query",
+    "question": "Who calls the send_sms function?",
+    "expected_query_type": "caller_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "5"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "medium",
+    "requires_abstention": true
   },
   {
     "id": "notification_service_081",
@@ -1517,7 +1581,8 @@
       "send_notification",
       "mark_as_read"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_082",
@@ -1536,7 +1601,8 @@
       "get_notifications",
       "send_notification"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_083",
@@ -1556,7 +1622,8 @@
       "mark_as_read",
       "delete_notification"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_084",
@@ -1576,7 +1643,8 @@
       "mark_as_read",
       "send_notification"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_085",
@@ -1597,7 +1665,8 @@
       "validate_email",
       "send_email"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_086",
@@ -1615,7 +1684,8 @@
       "send_email",
       "render_template"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_087",
@@ -1635,7 +1705,8 @@
       "render_template",
       "send_email"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_088",
@@ -1655,7 +1726,8 @@
       "validate_email",
       "send_email"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_089",
@@ -1676,7 +1748,8 @@
       "send_push",
       "unregister_device"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_090",
@@ -1694,7 +1767,8 @@
       "send_push",
       "register_device"
     ],
-    "difficulty": "easy"
+    "difficulty": "easy",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_091",
@@ -1713,7 +1787,8 @@
       "PushService",
       "send_push"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_092",
@@ -1732,7 +1807,8 @@
       "register_device",
       "PushService"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_093",
@@ -1753,7 +1829,8 @@
       "NotificationType",
       "NotificationChannel"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_094",
@@ -1773,7 +1850,8 @@
       "NotificationChannel",
       "NotificationStatus"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_095",
@@ -1793,7 +1871,8 @@
       "NotificationStatus",
       "Notification"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_096",
@@ -1813,7 +1892,8 @@
       "Notification",
       "NotificationType"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_097",
@@ -1831,7 +1911,8 @@
       "ResetPasswordTemplate",
       "OrderConfirmTemplate"
     ],
-    "difficulty": "medium"
+    "difficulty": "medium",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_098",
@@ -1849,32 +1930,31 @@
       "send_push",
       "register_device"
     ],
-    "difficulty": "hard"
+    "difficulty": "hard",
+    "requires_abstention": false
   },
   {
     "id": "notification_service_099",
     "repo_id": "notification_service",
     "repo_path": "company_repos/notification_service",
-    "question": "How many Python files are there?",
-    "expected_query_type": "count_query",
+    "question": "Explain the WebSocket real-time notification system",
+    "expected_query_type": "explanation_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "3"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "hard",
+    "requires_abstention": true
   },
   {
     "id": "notification_service_100",
     "repo_id": "notification_service",
     "repo_path": "company_repos/notification_service",
-    "question": "Count the number of API endpoints",
-    "expected_query_type": "count_query",
+    "question": "Where is the Kafka message consumer implemented?",
+    "expected_query_type": "location_query",
     "expected_sources": [],
     "expected_files": [],
-    "expected_keywords": [
-      "5"
-    ],
-    "difficulty": "easy"
+    "expected_keywords": [],
+    "difficulty": "hard",
+    "requires_abstention": true
   }
 ]
