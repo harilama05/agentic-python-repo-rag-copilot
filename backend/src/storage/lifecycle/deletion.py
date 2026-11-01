@@ -5,16 +5,19 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import delete
+from sqlalchemy import delete, inspect
 
 from src.core.config import RUNTIME_DIR
-from src.db.models import Chunk, ChunkEmbedding, CodeEdge, CodeNode, Repository
-from src.db.session import get_db_session
+from src.db.models import Chunk, ChunkEmbedding, CodeEdge, CodeNode, Repository, RepositoryFile
+from src.db.session import engine, get_db_session
 from src.storage.lifecycle.models import is_temporary_repository
 from src.storage.lifecycle.queries import get_repository_snapshot
 
 def delete_postgres_rows_for_repo(repo_id: str) -> None:
+    has_snapshots = inspect(engine).has_table("repository_files")
     with get_db_session() as session:
+        if has_snapshots:
+            session.execute(delete(RepositoryFile).where(RepositoryFile.repo_id == repo_id))
         session.execute(delete(ChunkEmbedding).where(ChunkEmbedding.repo_id == repo_id))
         session.execute(delete(CodeEdge).where(CodeEdge.repo_id == repo_id))
         session.execute(delete(CodeNode).where(CodeNode.repo_id == repo_id))

@@ -103,6 +103,7 @@ class ChatResponse(BaseModel):
     sources: List[Dict[str, Any]]
     raw_results: Dict[str, Any]
     warnings: List[str] = []
+    status: str = "completed"
 
 
 class TemporaryRepoCleanupResponse(BaseModel):

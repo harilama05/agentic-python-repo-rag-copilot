@@ -199,4 +199,5 @@ def post_chat(request: ChatRequest) -> ChatResponse:
         sources=_json_safe(response.sources),
         raw_results=_json_safe(response.raw_results),
         warnings=extract_response_warnings(response),
+        status=response.status,
     )

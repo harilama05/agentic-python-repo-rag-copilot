@@ -1,9 +1,11 @@
+"""Live router smoke check using the configured OpenAI GPT-6 Luna provider."""
+
 from src.agent_core.query_router import LLMQueryRouter
-from src.generation.llm import GeminiLLM
+from src.generation.llm import get_llm
 
 
 def main():
-    router = LLMQueryRouter(llm=GeminiLLM())
+    router = LLMQueryRouter(llm=get_llm())
 
     questions = [
         "Dự án này dùng để làm gì?",

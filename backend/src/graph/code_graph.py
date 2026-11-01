@@ -92,11 +92,14 @@ class CodeGraph:
         if not symbol:
             return []
 
+        if symbol in self.nodes:
+            return [self.nodes[symbol]]
+
         results: List[CodeNode] = []
 
-        if symbol in self.qualified_name_to_id:
-            node_id = self.qualified_name_to_id[symbol]
-            return [self.nodes[node_id]]
+        exact = [node for node in self.nodes.values() if node.qualified_name == symbol]
+        if exact:
+            return exact
 
         if symbol in self.name_to_ids:
             for node_id in self.name_to_ids[symbol]:

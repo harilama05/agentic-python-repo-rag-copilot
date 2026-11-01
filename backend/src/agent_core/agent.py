@@ -24,6 +24,7 @@ from src.core.constants import (
 from src.generation.answer_generator import GroundedAnswerGenerator
 from src.generation.llm import BaseLLM
 from src.core.settings import DOCUMENTATION_TOP_K, DEFAULT_TOP_K, FALLBACK_SEARCH_TOP_K
+from src.core.settings import AGENT_MODE
 
 
 class CodebaseAgent:
@@ -36,11 +37,15 @@ class CodebaseAgent:
         llm: Optional[BaseLLM] = None,
         use_llm: bool = False,
         answer_generator: GroundedAnswerGenerator | None = None,
+        agent_mode: str = AGENT_MODE,
     ):
         self.tools = tools
         self.query_router = query_router
         self.llm = llm
         self.use_llm = use_llm
+        if agent_mode not in {"loop", "workflow"}:
+            raise ValueError("agent_mode must be 'loop' or 'workflow'.")
+        self.agent_mode = agent_mode
         self.answer_generator = answer_generator or (
             GroundedAnswerGenerator(llm) if llm is not None else None
         )
@@ -108,14 +113,22 @@ class CodebaseAgent:
             },
         )
 
-    def answer(self, question: str) -> AgentResponse:
+    def answer(self, question: str, history: list[dict] | None = None) -> AgentResponse:
         """Answer one user question using routing, tools, and optional LLM output."""
+        if self.agent_mode == "loop" and self.use_llm and self.llm is not None and self.llm.supports_tools:
+            from src.agent_core.agent_loop import AgentLoop
+            return AgentLoop(self.tools, self.llm).run(question, history)
         query_plans = self.query_router.route_many(question)
         response = self._answer_planned_query(
             question=question,
             query_plans=query_plans,
         )
-        return self._maybe_generate_llm_answer(response)
+        response = self._maybe_generate_llm_answer(response)
+        response.raw_results["agent_mode"] = "workflow_fallback"
+        if self.use_llm and self.llm is None:
+            response.status = "fallback"
+            response.warnings.append("OpenAI is not configured. Paste OPENAI_API_KEY into backend/.env. Showing the deterministic workflow answer.")
+        return response
 
     def _answer_single_plan(
         self,

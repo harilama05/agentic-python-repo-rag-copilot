@@ -67,6 +67,10 @@ class EvalResult:
     latency_seconds: float | None = None
     router_fallback: bool = False
     llm_failure: bool = False
+    agent_status: str = "completed"
+    tool_call_count: int = 0
+    model_steps: int = 0
+    total_tokens: int = 0
 
 
 def load_eval_cases(path: str | Path) -> List[EvalCase]:
@@ -210,6 +214,10 @@ def evaluate_response(
         latency_seconds=latency_seconds,
         router_fallback=is_router_fallback(effective_raw_results),
         llm_failure=is_llm_failure(effective_raw_results),
+        agent_status=getattr(response, "status", "completed"),
+        tool_call_count=int((effective_raw_results or {}).get("tool_call_count", 0)),
+        model_steps=int((effective_raw_results or {}).get("model_steps", 0)),
+        total_tokens=int(((effective_raw_results or {}).get("usage") or {}).get("total_tokens", 0)),
     )
 
 
@@ -231,6 +239,10 @@ def summarize_eval_results(results: List[EvalResult]) -> Dict[str, float]:
             "avg_latency_seconds": 0.0,
             "router_fallback_rate": 0.0,
             "llm_failure_rate": 0.0,
+            "agent_completion_rate": 0.0,
+            "avg_tool_call_count": 0.0,
+            "avg_model_steps": 0.0,
+            "avg_total_tokens": 0.0,
         }
 
     num_cases = len(results)
@@ -295,4 +307,8 @@ def summarize_eval_results(results: List[EvalResult]) -> Dict[str, float]:
         "avg_latency_seconds": safe_average(latency_values),
         "router_fallback_rate": router_fallback_rate,
         "llm_failure_rate": llm_failure_rate,
+        "agent_completion_rate": sum(result.agent_status == "completed" for result in results) / num_cases,
+        "avg_tool_call_count": sum(result.tool_call_count for result in results) / num_cases,
+        "avg_model_steps": sum(result.model_steps for result in results) / num_cases,
+        "avg_total_tokens": sum(result.total_tokens for result in results) / num_cases,
     }

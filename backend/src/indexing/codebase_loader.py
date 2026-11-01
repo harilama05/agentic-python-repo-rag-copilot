@@ -76,6 +76,7 @@ def load_existing_codebase_agent(
     metadata_store = MetadataStore()
     code_graph = metadata_store.load_code_graph(repo.repo_id)
     indexed_chunks = metadata_store.load_chunks(repo.repo_id)
+    source_files = metadata_store.load_files(repo.repo_id)
     json_count = _count_distinct_chunk_files_by_source_type(indexed_chunks, "json")
     text_count = _count_distinct_chunk_files_by_source_type(indexed_chunks, "text")
     vector_store = SupabaseCodeVectorStore(repo_id=repo.repo_id)
@@ -88,6 +89,7 @@ def load_existing_codebase_agent(
         repo_root=repo_path,
         retrieval_mode=retrieval_mode,
         code_graph=code_graph,
+        source_files=source_files or None,
     )
 
     shared_llm = build_optional_llm(use_llm or use_llm_router)

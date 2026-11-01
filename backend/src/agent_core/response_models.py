@@ -4,7 +4,7 @@ These models are intentionally lightweight dataclasses so both Streamlit and
 future API layers can serialize and display agent responses consistently.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 
@@ -18,3 +18,5 @@ class AgentResponse:
     tools_used: List[str]
     sources: List[Dict[str, Any]]
     raw_results: Dict[str, Any]
+    warnings: List[str] = field(default_factory=list)
+    status: str = "completed"

@@ -5,6 +5,7 @@ writeback for new or refreshed repository indexes.
 """
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 from pathlib import Path
 
 from src.agent_core.agent import CodebaseAgent
@@ -116,7 +117,9 @@ def build_optional_llm(enabled: bool) -> BaseLLM | None:
 
     try:
         return get_llm()
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("LLM unavailable: %s", type(exc).__name__)
         return None
 
 
@@ -176,6 +179,11 @@ def build_codebase_agent(
     text_files = scan_text_files(repo_path)
     ignored_file_count = count_ignored_files(repo_path)
 
+    source_files = {
+        path.relative_to(repo_path).as_posix(): path.read_text(encoding="utf-8", errors="ignore")
+        for path in python_files + markdown_files + json_files + text_files
+    }
+
     all_chunks = []
 
     for file_path in python_files:
@@ -203,6 +211,11 @@ def build_codebase_agent(
             "No indexable chunks were created for this repository. "
             f"Supported file types: {supported_extensions}."
         )
+
+    # Chunk primary keys must remain isolated when two repositories share content.
+    for chunk in all_chunks:
+        chunk.chunk_id = hashlib.sha256(f"{repo_id}:{chunk.chunk_id}".encode()).hexdigest()
+        chunk.metadata["chunk_id"] = chunk.chunk_id
 
     code_graph = build_code_graph(repo_path)
     vector_store = SupabaseCodeVectorStore(repo_id=repo_id)
@@ -241,6 +254,8 @@ def build_codebase_agent(
             chunks=all_chunks,
         )
 
+        metadata_store.replace_files(repo_id, source_files)
+
         metadata_store.replace_code_graph(
             repo_id=repo_id,
             code_graph=code_graph,
@@ -258,6 +273,7 @@ def build_codebase_agent(
         repo_root=repo_path,
         retrieval_mode=retrieval_mode,
         code_graph=code_graph,
+        source_files=source_files,
     )
 
     shared_llm = build_optional_llm(use_llm or use_llm_router)

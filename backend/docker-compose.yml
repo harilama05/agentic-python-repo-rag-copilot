@@ -33,9 +33,10 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-      LLM_BACKEND: ${LLM_BACKEND:-deepseek}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: gpt-6-luna
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-low}
+      LLM_BACKEND: openai
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8501}
     ports:
       - "8000:8000"
@@ -60,9 +61,10 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-      LLM_BACKEND: ${LLM_BACKEND:-deepseek}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: gpt-6-luna
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-low}
+      LLM_BACKEND: openai
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8501}
     ports:
       - "8501:8501"

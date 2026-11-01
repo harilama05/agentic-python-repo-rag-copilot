@@ -1,8 +1,11 @@
 const USE_MOCK = false;
-const API_BASE_URL = "/api";
+const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? `http://${window.location.hostname}:8000`
+    : "/api";
 
 let selectedCodebase = null;
 let companyRepos = [];
+let activeSessionId = null;
 
 /* =========================================================
    MOCK COMPANY REPOS
@@ -564,10 +567,31 @@ function createStreamlitReport({ question, answer, sources, debug, showDebug, ra
     }
 
     if (showDebug && rawResults && Object.keys(rawResults).length > 0) {
+        if (Array.isArray(rawResults.steps)) {
+            wrapper.appendChild(createAgentTraceBlock(rawResults));
+        }
         wrapper.appendChild(createRawResultsDetails(rawResults));
     }
 
     return wrapper;
+}
+
+function createAgentTraceBlock(rawResults) {
+    const details = document.createElement("details");
+    details.className = "streamlit-details";
+    const summary = document.createElement("summary");
+    summary.textContent = `Agent steps · ${rawResults.agent_status || "unknown"} · ${rawResults.elapsed_seconds || 0}s`;
+    details.appendChild(summary);
+    const status = document.createElement("p");
+    status.textContent = `Stop: ${rawResults.stop_reason || "unknown"} · Model turns: ${rawResults.model_steps || 0} · Tool calls: ${rawResults.tool_call_count || 0}`;
+    details.appendChild(status);
+    for (const step of rawResults.steps) {
+        const pre = document.createElement("pre");
+        pre.className = "streamlit-code-excerpt";
+        pre.textContent = `${step.step}. ${step.tool || "model"} — ${step.status}\n${JSON.stringify(step.arguments || {}, null, 2)}${step.error ? "\n" + step.error : ""}`;
+        details.appendChild(pre);
+    }
+    return details;
 }
 
 
@@ -1144,7 +1168,9 @@ async function request(path, options = {}) {
         return {};
     }
 
-    return response.json();
+    const data = await response.json();
+    if (data.session_id) activeSessionId = data.session_id;
+    return data;
 }
 
 function normalizeCompanyRepo(repo) {
@@ -1235,6 +1261,7 @@ async function loadCompanyRepoApi(repoId) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
+            session_id: activeSessionId,
             retrieval_mode: getRetrievalMode(),
             use_llm: true,
             use_llm_router: true,
@@ -1275,6 +1302,7 @@ async function indexTemporaryGithubRepoApi(payload) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
+            session_id: activeSessionId,
             github_url: payload.github_url,
             branch: payload.branch || null,
             retrieval_mode: getRetrievalMode(),
@@ -1311,6 +1339,7 @@ async function uploadTemporaryZipRepoApi(file) {
 
     const formData = new FormData();
     formData.append("file", file);
+    if (activeSessionId) formData.append("session_id", activeSessionId);
     formData.append("retrieval_mode", getRetrievalMode());
     formData.append("use_llm", "true");
     formData.append("use_llm_router", "true");

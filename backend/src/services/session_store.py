@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from src.agent_core.response_models import AgentResponse
 from src.indexing.models import IndexedCodebase
+from src.core.settings import AGENT_HISTORY_TURNS
 
 
 @dataclass
@@ -74,6 +75,7 @@ class SessionStore:
         """Append one agent response to a session's chat history."""
         session = self.get_or_create_session(session_id)
         session.chat_history.append(response)
+        session.chat_history = session.chat_history[-AGENT_HISTORY_TURNS:] if AGENT_HISTORY_TURNS > 0 else []
         return session
 
     def get_chat_history(self, session_id: str) -> List[AgentResponse]:

@@ -2,7 +2,6 @@
 
 from typing import List
 
-from sentence_transformers import SentenceTransformer
 
 from src.core.settings import DEFAULT_EMBEDDING_MODEL
 
@@ -11,6 +10,7 @@ class LocalEmbeddingModel:
     """Local CPU embedding model using sentence-transformers."""
 
     def __init__(self, model_name: str | None = None):
+        from sentence_transformers import SentenceTransformer
         self.model_name = model_name or DEFAULT_EMBEDDING_MODEL
         self.model = SentenceTransformer(self.model_name)
 

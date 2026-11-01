@@ -4,9 +4,12 @@ This module is intentionally isolated so Accurate mode can use a Cross-Encoder
 without mixing model code into retrieval.
 """
 
-from typing import Any, Dict, List, Protocol
+from __future__ import annotations
 
-from sentence_transformers import CrossEncoder
+from typing import Any, Dict, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sentence_transformers import CrossEncoder
 
 from src.core.settings import CROSS_ENCODER_MODEL
 
@@ -30,6 +33,7 @@ class CrossEncoderReranker:
 
     def _get_model(self) -> CrossEncoder:
         if self.model is None:
+            from sentence_transformers import CrossEncoder
             self.model = CrossEncoder(self.model_name)
 
         return self.model

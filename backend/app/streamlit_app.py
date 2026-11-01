@@ -362,6 +362,13 @@ for response in reversed(st.session_state.chat_history):
 
     st.markdown(response.answer)
 
+    for warning in response.warnings:
+        st.warning(warning)
+    if response.raw_results.get("agent_mode") == "tool_loop":
+        st.caption(f"Agent status: {response.status} | Stop: {response.raw_results.get('stop_reason')}")
+        with st.expander("Agent steps"):
+            st.json(response.raw_results.get("steps", []))
+
     col1, col2 = st.columns([1, 2])
 
     with col1:

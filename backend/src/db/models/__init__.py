@@ -4,6 +4,7 @@ from src.db.models.chunk import Chunk
 from src.db.models.chunk_embedding import ChunkEmbedding
 from src.db.models.code_graph import CodeNode, CodeEdge
 from src.db.models.index_job import IndexJob
+from src.db.models.repository_file import RepositoryFile
 
 __all__ = [
     "Base",
@@ -14,4 +15,5 @@ __all__ = [
     "CodeNode",
     "CodeEdge",
     "IndexJob",
+    "RepositoryFile",
 ]

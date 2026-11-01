@@ -1,6 +1,7 @@
 """Evaluation runner for repository QA behavior."""
 
 from collections import defaultdict
+import argparse
 from pathlib import Path
 import sys
 
@@ -191,16 +192,39 @@ def print_summary(title, results, extended_results):
     print(f"Answer non-empty rate:           {safe_average(answer_non_empty_values):.2%}")
     print(f"Router fallback rate:            {safe_average(router_fallback_values):.2%}")
     print(f"LLM failure rate:                {safe_average(llm_failure_values):.2%}")
+    print(f"Agent completion rate:           {summary['agent_completion_rate']:.2%}")
+    print(f"Average tool calls:              {summary['avg_tool_call_count']:.2f}")
+    print(f"Average model steps:             {summary['avg_model_steps']:.2f}")
+    print(f"Average total tokens:            {summary['avg_total_tokens']:.0f}")
 
 
 def main() -> None:
     """Run the repository QA evaluation suite."""
-    eval_path = EVAL_CASES_PATH
+    parser = argparse.ArgumentParser(description="Evaluate repository QA using OpenAI GPT-6 Luna.")
+    parser.add_argument("--cases", type=Path, default=EVAL_CASES_PATH)
+    parser.add_argument("--repo", action="append", help="Evaluate only this repo ID (repeatable).")
+    parser.add_argument("--skip-missing-repos", action="store_true")
+    parser.add_argument("--agent-mode", choices=["loop", "workflow"], default="loop",
+                        help="Compare the new loop with the fixed workflow using the same OpenAI model.")
+    args = parser.parse_args()
+    eval_path = args.cases
 
     cases = load_eval_cases(eval_path)
+    if args.repo:
+        cases = [case for case in cases if case.repo_id in args.repo]
+    missing = sorted({case.repo_id for case in cases if not resolve_repo_path(case.repo_path).is_dir()})
+    if missing:
+        if not args.skip_missing_repos:
+            parser.error(f"Missing repository fixtures: {', '.join(missing)}. Supply them or use --skip-missing-repos.")
+        print(f"Skipping missing repository fixtures: {', '.join(missing)}")
+        cases = [case for case in cases if case.repo_id not in missing]
+    if not cases:
+        parser.error("No evaluation cases selected.")
     print(f"Loaded {len(cases)} eval cases")
 
     indexed_repos = build_indexed_repos(cases)
+    for indexed in indexed_repos.values():
+        indexed.agent.agent_mode = args.agent_mode
     results = []
     extended_results = []
 

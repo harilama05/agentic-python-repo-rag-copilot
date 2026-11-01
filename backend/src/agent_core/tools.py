@@ -4,9 +4,11 @@ This module keeps transport layers and the main agent decoupled from the
 underlying retriever, graph, and reranking implementations.
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from src.core.constants import (
     DOC_EXTENSIONS,
@@ -16,9 +18,9 @@ from src.core.constants import (
     TEXT_EXTENSIONS,
 )
 from src.graph.code_graph import CodeGraph, CodeNode
-from src.reranking.cross_encoder_reranker import CrossEncoderReranker
 from src.reranking.reranker import NoOpReranker
-from src.retrieval.retriever import CodeRetriever, CodeSearchResult
+if TYPE_CHECKING:
+    from src.retrieval.retriever import CodeRetriever, CodeSearchResult
 from src.core.settings import (
     CROSS_ENCODER_CANDIDATE_K,
     DEFAULT_CANDIDATE_K,
@@ -108,13 +110,16 @@ class CodebaseTools:
         repo_root: str | Path,
         retrieval_mode: str = RETRIEVAL_MODE_FAST,
         code_graph: CodeGraph | None = None,
+        source_files: dict[str, str] | None = None,
     ):
         self.retriever = retriever
         self.repo_root = Path(repo_root).resolve()
         self.retrieval_mode = retrieval_mode
         self.code_graph = code_graph or CodeGraph()
+        self.source_files = source_files
 
         if retrieval_mode == RETRIEVAL_MODE_ACCURATE:
+            from src.reranking.cross_encoder_reranker import CrossEncoderReranker
             self.reranker = CrossEncoderReranker()
         else:
             self.reranker = NoOpReranker()
@@ -126,6 +131,12 @@ class CodebaseTools:
     ) -> List[CodeNode]:
         """Resolve a user-provided symbol into graph nodes."""
         query = symbol_name.strip()
+        if query in self.code_graph.nodes:
+            return [self.code_graph.nodes[query]]
+        if "::" in query:
+            path, query = query.split("::", 1)
+            return [node for node in self.code_graph.find_nodes(query)
+                    if node.relative_path == path.replace("\\", "/")][:max_candidates]
         query_lower = query.lower()
 
         exact_qualified: List[CodeNode] = []
@@ -206,6 +217,16 @@ class CodebaseTools:
 
     def find_symbol(self, symbol_name: str, top_k: int = 10) -> List[Dict[str, Any]]:
         """Find likely symbol definitions by symbol name."""
+        exact = []
+        for chunk in self.retriever.indexed_chunks:
+            meta = chunk.get("metadata", chunk) if isinstance(chunk, dict) else chunk.metadata
+            if meta.get("symbol_type") not in {"function", "async_function", "class", "method", "async_method"}:
+                continue
+            if symbol_name.lower() in {str(meta.get("symbol_name", "")).lower(), str(meta.get("qualified_name", "")).lower()}:
+                text = chunk.get("text", "") if isinstance(chunk, dict) else chunk.text
+                exact.append({**meta, "text": text})
+        if exact:
+            return exact[:top_k]
         results = self.retriever.search_code(
             query=symbol_name,
             top_k=top_k,
@@ -303,6 +324,10 @@ class CodebaseTools:
 
     def _read_file_from_db(self, relative_path: str) -> List[str]:
         target_path = str(relative_path).replace("\\", "/")
+        if self.source_files is not None:
+            if target_path not in self.source_files:
+                raise FileNotFoundError(f"File not found in indexed snapshots: {relative_path}")
+            return self.source_files[target_path].splitlines()
         lines_dict = {}
 
         for chunk in self.retriever.indexed_chunks:
@@ -341,6 +366,11 @@ class CodebaseTools:
 
         total_lines = len(lines)
 
+        if start_line is not None and (int(start_line) < 1 or int(start_line) > total_lines):
+            raise ValueError("Requested start line is outside the indexed file.")
+        if end_line is not None and start_line is not None and int(end_line) < int(start_line):
+            raise ValueError("end_line must be greater than or equal to start_line.")
+
         if start_line is None:
             start_line = 1
 
@@ -363,12 +393,17 @@ class CodebaseTools:
             "end_line": end_line,
             "total_lines": total_lines,
             "content": numbered_text,
+            "complete_snapshot": self.source_files is not None,
         }
 
     def _find_references_in_db(self, patterns: list, short_symbol: str, include_definition: bool, symbol_name: str, max_results: int) -> List[Dict[str, Any]]:
         references = []
-        for chunk in self.retriever.indexed_chunks:
-            p, start, _end, code_text = self._get_chunk_meta(chunk)
+        records = (
+            [(p, 1, 0, text) for p, text in self.source_files.items()]
+            if self.source_files is not None
+            else [self._get_chunk_meta(chunk) for chunk in self.retriever.indexed_chunks]
+        )
+        for p, start, _end, code_text in records:
             if not p:
                 continue
 
@@ -448,7 +483,7 @@ class CodebaseTools:
             return self._build_ambiguous_symbol_response(symbol_name, candidates)
 
         resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
-        result = self.code_graph.find_callers(resolved_symbol)
+        result = self.code_graph.find_callers(candidates[0].node_id if candidates else symbol_name)
 
         return {
             "symbol": symbol_name,
@@ -472,7 +507,7 @@ class CodebaseTools:
             return self._build_ambiguous_symbol_response(symbol_name, candidates)
 
         resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
-        result = self.code_graph.find_callees(resolved_symbol)
+        result = self.code_graph.find_callees(candidates[0].node_id if candidates else symbol_name)
 
         return {
             "symbol": symbol_name,
@@ -497,7 +532,7 @@ class CodebaseTools:
 
         resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
         result = self.code_graph.impact_analysis(
-            symbol=resolved_symbol,
+            symbol=candidates[0].node_id if candidates else symbol_name,
             max_depth=max_depth,
         )
 
@@ -551,6 +586,31 @@ class CodebaseTools:
             ],
         }
 
+    def trace_flow(self, symbol_name: str, max_depth: int = 3) -> Dict[str, Any]:
+        """Return bounded static call relationships, not a runtime execution order."""
+        candidates = self.resolve_graph_symbols(symbol_name)
+        if len(candidates) > 1:
+            return self._build_ambiguous_symbol_response(symbol_name, candidates)
+        if not candidates:
+            return {"nodes": [], "edges": [], "static_analysis": True}
+        visited = set()
+        queue = [(candidates[0].node_id, 0)]
+        edges = []
+        while queue and len(visited) < 100:
+            node_id, depth = queue.pop(0)
+            if node_id in visited:
+                continue
+            visited.add(node_id)
+            if depth >= max_depth:
+                continue
+            for edge in self.code_graph.outgoing.get(node_id, []):
+                if edge.edge_type == "calls":
+                    edges.append({"caller": edge.source_id, "callee": edge.target_id})
+                    queue.append((edge.target_id, depth + 1))
+        return {"nodes": [format_graph_node(self.code_graph.nodes[node_id]) for node_id in sorted(visited)],
+                "edges": edges, "static_analysis": True,
+                "truncated": bool(queue), "max_depth": max_depth}
+
     def count_files(self, file_type: str = "python") -> Dict[str, Any]:
         """Count and list files in the repository by type.
 
@@ -569,7 +629,13 @@ class CodebaseTools:
 
         file_info: Dict[str, Dict[str, Any]] = {}  # path -> {extension, max_end_line}
 
-        for chunk in self.retriever.indexed_chunks:
+        if self.source_files is not None:
+            for path, content in self.source_files.items():
+                ext = Path(path).suffix.lower()
+                if ext in extensions:
+                    file_info[path] = {"extension": ext, "max_end_line": len(content.splitlines())}
+
+        for chunk in self.retriever.indexed_chunks if self.source_files is None else []:
             p, start, end, _code = self._get_chunk_meta(chunk)
             if not p:
                 continue

@@ -48,7 +48,9 @@ def answer_question(
     )
 
     try:
-        response = indexed_codebase.agent.answer(cleaned_question)
+        history = [{"question": item.question, "answer": item.answer}
+                   for item in store.get_chat_history(session_id)]
+        response = indexed_codebase.agent.answer(cleaned_question, history=history)
         store.append_chat_response(session_id, response)
 
         source_excerpts = response.raw_results.get("source_excerpts", [])

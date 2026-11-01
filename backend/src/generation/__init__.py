@@ -5,6 +5,6 @@ generation from the rest of the agent runtime.
 """
 
 from src.generation.answer_generator import GroundedAnswerGenerator
-from src.generation.llm import BaseLLM, DeepSeekLLM, GeminiLLM, get_llm
+from src.generation.llm import BaseLLM, OpenAILLM, get_llm
 
-__all__ = ["BaseLLM", "DeepSeekLLM", "GeminiLLM", "get_llm", "GroundedAnswerGenerator"]
+__all__ = ["BaseLLM", "OpenAILLM", "get_llm", "GroundedAnswerGenerator"]

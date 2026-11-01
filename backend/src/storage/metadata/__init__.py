@@ -2,8 +2,9 @@ from .utils import utc_now, make_stable_chunk_id, get_chunk_text, get_chunk_meta
 from .repository_mixin import RepositoryStoreMixin
 from .chunk_mixin import ChunkStoreMixin
 from .code_graph_mixin import CodeGraphStoreMixin
+from .file_mixin import FileStoreMixin
 
-class MetadataStore(RepositoryStoreMixin, ChunkStoreMixin, CodeGraphStoreMixin):
+class MetadataStore(RepositoryStoreMixin, ChunkStoreMixin, CodeGraphStoreMixin, FileStoreMixin):
     """
     PostgreSQL metadata store composed of domain-specific mixins.
     """

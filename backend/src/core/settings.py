@@ -38,3 +38,12 @@ MAX_GITHUB_REPO_MB = 100
 load_dotenv(override=True)
 
 EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIMENSION))
+
+# Per-question limits. Model calls receive the remaining time as their timeout.
+AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "8"))
+AGENT_MAX_TOOL_CALLS = int(os.getenv("AGENT_MAX_TOOL_CALLS", "16"))
+AGENT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "90"))
+AGENT_MAX_CONTEXT_CHARS = int(os.getenv("AGENT_MAX_CONTEXT_CHARS", "100000"))
+AGENT_TOOL_RESULT_CHARS = int(os.getenv("AGENT_TOOL_RESULT_CHARS", "12000"))
+AGENT_HISTORY_TURNS = int(os.getenv("AGENT_HISTORY_TURNS", "4"))
+AGENT_MODE = os.getenv("AGENT_MODE", "loop").strip().lower()

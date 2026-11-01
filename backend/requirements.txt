@@ -24,7 +24,6 @@ fsspec==2026.4.0
 gitdb==4.0.12
 GitPython==3.1.50
 google-auth==2.53.0
-google-genai==2.3.0
 googleapis-common-protos==1.75.0
 greenlet==3.5.0
 grpcio==1.80.0

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from src.core.constants import SOURCE_TYPE_CODE
 from src.parsing.ast_parser import CodeSymbol, ParsedPythonFile
+from src.chunking.text_chunker import build_text_chunks
 
 
 @dataclass
@@ -173,4 +174,15 @@ def build_code_chunks(
             )
         )
 
+    # File-level windows preserve imports, decorators, constants and module code,
+    # including files with no function/class definitions.
+    file_path = Path(parsed_file.file_path)
+    relative_path = file_path.relative_to(repo_root_path).as_posix() if repo_root_path else file_path.as_posix()
+    for window in build_text_chunks({
+        "text": parsed_file.source_code,
+        "metadata": {"source_type": SOURCE_TYPE_CODE, "file_path": str(file_path),
+                     "relative_path": relative_path, "symbol_type": "module",
+                     "qualified_name": relative_path, "symbol_name": file_path.stem},
+    }):
+        chunks.append(CodeChunk(window.chunk_id, window.text, window.text, window.metadata))
     return chunks

@@ -20,7 +20,7 @@ def parse_json_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, A
     """
     Parse a JSON file and return normalized text + metadata.
 
-    The JSON content is pretty-printed so retrieval can match keys and values.
+    JSON is validated while original text and line positions are preserved.
     """
     path = Path(file_path).resolve()
     root = Path(repo_root).resolve()
@@ -30,8 +30,9 @@ def parse_json_file(file_path: str | Path, repo_root: str | Path) -> Dict[str, A
     raw_text = _read_json_text_safely(path)
 
     try:
-        data = json.loads(raw_text)
-        text = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True)
+        json.loads(raw_text)
+        # Keep original line numbers: citations refer to the uploaded source.
+        text = raw_text
         valid_json = True
         parse_error = None
     except Exception as exc:
