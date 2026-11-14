@@ -4,6 +4,10 @@ An AI agent for exploring Python repositories through questions and source citat
 
 ## Demo
 
+**[Open the live demo](https://agentic-python-repo-rag-copilot-fro.vercel.app/)** — Vercel frontend, Render API, and Supabase storage.
+
+Select **TaskFlow API** or **Inventory API**, keep **Fast** mode for an initial try, and ask a question. The hosted OpenAI agent requires a server-configured API key; visitors do not enter one. Frontend/API connectivity and sample-repo listing have been verified; hosted model loading and end-to-end answers still need validation.
+
 | Chat interface | Sources and line ranges |
 |:---:|:---:|
 | ![Codebase chat interface](./docs/images/chat-ui.png) | ![Source citations panel](./docs/images/sources-panel.png) |

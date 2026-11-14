@@ -85,7 +85,7 @@ Re-indexing replaces that repo's existing index. Source files are needed during 
 
 ## Deployment configuration
 
-These are configuration pointers, not a claim that the current version has been deployed or load-tested.
+The [live demo](https://agentic-python-repo-rag-copilot-fro.vercel.app/) uses Vercel for the frontend and [Render for the API](https://agentic-python-repo-rag-copilot.onrender.com/health), backed by Supabase. The deployed Docker image starts successfully, and `/api/health` plus `/api/company-repos` have returned HTTP 200 through Vercel. Hosted model loading and end-to-end answers have not yet been validated; the deployment has not been load-tested. The settings below also describe how to configure your own deployment.
 
 | Backend setting | Value |
 |---|---|
