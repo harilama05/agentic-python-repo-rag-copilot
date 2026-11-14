@@ -4,9 +4,9 @@
 
 ## Current validation
 
-The latest local validation passed **46 offline tests** covering agent loop decisions, error and budget handling, OpenAI Responses serialization through mocked HTTP, API/session behavior, and source snapshot persistence.
+The local validation on **2026-11-14** passed **76 offline tests** covering agent loop decisions, error and budget handling, mocked OpenAI Responses serialization, API/session behavior, source snapshots, scoped static resolution, runtime evidence, target-package isolation and graph persistence. See [call graph validation](./call-graph.md).
 
-Live smoke checks used `gpt-6-luna`, Fast retrieval, Supabase, and the two bundled fixtures:
+Live smoke checks on **2026-11-14** used `gpt-6-luna`, Fast retrieval, Supabase, and the two bundled fixtures:
 
 | Check | Observed behavior |
 |---|---|
@@ -14,7 +14,20 @@ Live smoke checks used `gpt-6-luna`, Fast retrieval, Supabase, and the two bundl
 | Follow up: where is that method called? | Used conversation context, found callers, read the calling file, and cited it |
 | Find how inventory replenishment is decided | Used hybrid search and read the service/model implementation |
 
-These are functional checks, not a representative estimate of answer accuracy or latency.
+The latest live run also checked:
+
+| Check | Result |
+|---|---|
+| Six API questions: explanation, follow-up, impact, callers, execution certainty and missing symbol | Five completed answers; the missing symbol correctly returned `insufficient_evidence` |
+| Reuse a session while switching TaskFlow to Inventory | History reset; no TaskFlow conversation carried into the new repo |
+| Source paths and ranges in the six responses | All 16 returned citations matched indexed files and valid line ranges; this is not a semantic correctness score |
+| Execute the trusted sample programs and import reports | TaskFlow: 2 Python call events / 1 edge; Inventory: 10 events / 4 edges; reports persisted and read back from Supabase |
+| Inventory runtime relationship | `InventoryService.get_stock_status` called `InventoryItem.needs_restock` twice in the recorded run |
+| Additional browser form submission | Rendered an answer with 3 sources and a 5-call trace, including `find_callers(evidence="observed")`; explained that two events do not prove execution in every request |
+
+The live run exposed and fixed a recording-CLI import-path collision between a target repo's `app/` namespace and the backend's Streamlit package. A subprocess regression test now covers it. Browser form submission/rendering was exercised programmatically; physical pointer automation did not complete reliably in the integrated browser.
+
+These are functional checks, not a representative estimate of answer accuracy or latency. Large-repository indexing, memory use, concurrent users and deployment resilience have not been benchmarked; see [current indexing limits](./running.md#indexing-limits).
 
 Run offline tests from `backend/` with the installed project dependencies:
 

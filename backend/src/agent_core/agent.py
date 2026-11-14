@@ -889,7 +889,7 @@ class CodebaseAgent:
                 },
             )
 
-        lines = [f"`{resolved_symbol}` is called by:"]
+        lines = [f"The graph reports potential or recorded callers of `{resolved_symbol}`:"]
 
         for caller in callers:
             lines.append(
@@ -941,7 +941,7 @@ class CodebaseAgent:
             )
 
         if not callees:
-            answer = f"I found `{resolved_symbol}`, but it does not call any indexed functions or methods."
+            answer = f"I found `{resolved_symbol}`, but no callee relationships were resolved. Dynamic or external calls may still exist."
             sources = sources_nodes
 
             return AgentResponse(
@@ -955,7 +955,7 @@ class CodebaseAgent:
                 },
             )
 
-        lines = [f"`{resolved_symbol}` calls:"]
+        lines = [f"The graph reports potential or recorded callees of `{resolved_symbol}`:"]
 
         for callee in callees:
             lines.append(
@@ -1009,7 +1009,7 @@ class CodebaseAgent:
         if not affected:
             answer = (
                 f"I found `{resolved_symbol}`, but the code graph did not find any callers "
-                "that would be directly affected."
+                "with resolved dependencies. This does not establish that a change is safe."
             )
             sources = targets
             source_excerpts = self._build_source_excerpts(sources)

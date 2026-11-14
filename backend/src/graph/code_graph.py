@@ -1,14 +1,14 @@
 """AST-based code graph construction and traversal utilities.
 
-This module builds a lightweight graph of classes, methods, and functions for
-caller, callee, and impact analysis. The implementation preserves the existing
-behavior and identifiers used by metadata storage.
+Static candidate relationships and optional runtime observations share stable
+node IDs. Evidence and unresolved calls are retained across metadata storage.
 """
 
 import ast
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
+from collections import deque
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set
 
 from src.ingestion.scanner import scan_python_files
 
@@ -34,15 +34,18 @@ class CodeEdge:
     source_id: str
     target_id: str
     edge_type: str
+    certainty: str = "legacy_unknown"
+    sites: list[dict] = field(default_factory=list)
+    observations: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class ParsedDefinition:
-    """Temporary structure used while building the code graph."""
+    """Compatibility export for callers of the previous graph builder."""
 
     node: CodeNode
     ast_node: ast.AST
-    class_name: Optional[str] = None
+    class_name: str | None = None
 
 
 class CodeGraph:
@@ -55,6 +58,13 @@ class CodeGraph:
         self.incoming: Dict[str, List[CodeEdge]] = {}
         self.name_to_ids: Dict[str, List[str]] = {}
         self.qualified_name_to_id: Dict[str, str] = {}
+        self.unresolved_calls: list[dict] = []
+        self.diagnostics: list[dict] = []
+        self.node_info: dict[str, dict] = {}
+        self.source_hashes: dict[str, str] = {}
+        self.runtime_runs: list[dict] = []
+        self.analysis_version = 0
+        self._edge_index: dict[tuple[str, str, str], CodeEdge] = {}
 
     def add_node(self, node: CodeNode) -> None:
         """Add a graph node and update lookup indexes."""
@@ -62,25 +72,31 @@ class CodeGraph:
         self.name_to_ids.setdefault(node.name, []).append(node.node_id)
         self.qualified_name_to_id[node.qualified_name] = node.node_id
 
-    def add_edge(self, source_id: str, target_id: str, edge_type: str) -> None:
-        """Add a graph edge if it is not a duplicate or self-loop."""
-        if source_id == target_id:
-            return
-
+    def add_edge(self, source_id: str, target_id: str, edge_type: str,
+                 certainty: str = "legacy_unknown", sites: list[dict] | None = None,
+                 observations: list[dict] | None = None) -> None:
+        """Merge call sites; recursion is a valid relationship."""
         edge = CodeEdge(
             source_id=source_id,
             target_id=target_id,
             edge_type=edge_type,
+            certainty=certainty, sites=sites or [], observations=observations or [],
         )
 
-        for existing in self.edges:
-            if (
-                existing.source_id == edge.source_id
-                and existing.target_id == edge.target_id
-                and existing.edge_type == edge.edge_type
-            ):
-                return
+        key = (source_id, target_id, edge_type)
+        existing = self._edge_index.get(key)
+        if existing is not None:
+            for site in edge.sites:
+                if site not in existing.sites:
+                    existing.sites.append(site)
+            for observation in edge.observations:
+                if observation not in existing.observations:
+                    existing.observations.append(observation)
+            if existing.certainty == "legacy_unknown" or certainty == "inferred":
+                existing.certainty = certainty
+            return
 
+        self._edge_index[key] = edge
         self.edges.append(edge)
         self.outgoing.setdefault(source_id, []).append(edge)
         self.incoming.setdefault(target_id, []).append(edge)
@@ -106,7 +122,7 @@ class CodeGraph:
                 results.append(self.nodes[node_id])
 
         for node in self.nodes.values():
-            if node.qualified_name.endswith(symbol) and node not in results:
+            if node.qualified_name.endswith(f".{symbol}") and node not in results:
                 results.append(node)
 
         return results
@@ -127,6 +143,13 @@ class CodeGraph:
             "targets": target_nodes,
             "callers": callers,
         }
+
+    def call_edges(self, evidence: str = "all") -> list[CodeEdge]:
+        if evidence not in {"all", "static", "observed"}:
+            raise ValueError("evidence must be all, static, or observed")
+        return [edge for edge in self.edges if edge.edge_type == "calls"
+                and (evidence == "all" or (evidence == "observed" and edge.observations)
+                     or (evidence == "static" and (edge.sites or edge.certainty == "legacy_unknown")))]
 
     def find_callees(self, symbol: str) -> Dict[str, List[CodeNode]]:
         """Find graph nodes called by the source symbol."""
@@ -151,13 +174,14 @@ class CodeGraph:
         visited: Set[str] = set()
         affected_ids: Set[str] = set()
 
-        queue: List[Tuple[str, int]] = [
+        target_ids = {node.node_id for node in target_nodes}
+        queue = deque([
             (node.node_id, 0)
             for node in target_nodes
-        ]
+        ])
 
         while queue:
-            current_id, depth = queue.pop(0)
+            current_id, depth = queue.popleft()
 
             if current_id in visited:
                 continue
@@ -172,7 +196,8 @@ class CodeGraph:
                     continue
 
                 caller_id = edge.source_id
-                affected_ids.add(caller_id)
+                if caller_id not in target_ids:
+                    affected_ids.add(caller_id)
                 queue.append((caller_id, depth + 1))
 
         affected_nodes = [
@@ -185,256 +210,29 @@ class CodeGraph:
             "affected": affected_nodes,
         }
 
+    def analysis_snapshot(self) -> dict:
+        """JSON sidecar preserves evidence without altering legacy edge columns."""
+        return {"version": self.analysis_version, "edges": [asdict(e) for e in self.edges],
+                "unresolved_calls": self.unresolved_calls, "diagnostics": self.diagnostics,
+                "node_info": self.node_info, "source_hashes": self.source_hashes,
+                "runtime_runs": self.runtime_runs}
 
-def _node_id(relative_path: str, qualified_name: str, start_line: int, end_line: int) -> str:
-    return f"{relative_path}:{qualified_name}:{start_line}-{end_line}"
-
-
-def _get_end_line(node: ast.AST) -> int:
-    return int(getattr(node, "end_lineno", getattr(node, "lineno", 1)))
-
-
-def _collect_definitions_for_file(
-    file_path: Path,
-    repo_root: Path,
-) -> List[ParsedDefinition]:
-    source = file_path.read_text(encoding="utf-8", errors="ignore")
-    tree = ast.parse(source)
-
-    relative_path = str(file_path.resolve().relative_to(repo_root)).replace("\\", "/")
-
-    definitions: List[ParsedDefinition] = []
-
-    for item in tree.body:
-        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            start_line = item.lineno
-            end_line = _get_end_line(item)
-            qualified_name = item.name
-
-            node = CodeNode(
-                node_id=_node_id(relative_path, qualified_name, start_line, end_line),
-                name=item.name,
-                qualified_name=qualified_name,
-                node_type="function",
-                relative_path=relative_path,
-                start_line=start_line,
-                end_line=end_line,
-            )
-
-            definitions.append(
-                ParsedDefinition(
-                    node=node,
-                    ast_node=item,
-                    class_name=None,
-                )
-            )
-
-        elif isinstance(item, ast.ClassDef):
-            class_start = item.lineno
-            class_end = _get_end_line(item)
-
-            class_node = CodeNode(
-                node_id=_node_id(relative_path, item.name, class_start, class_end),
-                name=item.name,
-                qualified_name=item.name,
-                node_type="class",
-                relative_path=relative_path,
-                start_line=class_start,
-                end_line=class_end,
-            )
-
-            definitions.append(
-                ParsedDefinition(
-                    node=class_node,
-                    ast_node=item,
-                    class_name=None,
-                )
-            )
-
-            for child in item.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    start_line = child.lineno
-                    end_line = _get_end_line(child)
-                    qualified_name = f"{item.name}.{child.name}"
-
-                    method_node = CodeNode(
-                        node_id=_node_id(relative_path, qualified_name, start_line, end_line),
-                        name=child.name,
-                        qualified_name=qualified_name,
-                        node_type="method",
-                        relative_path=relative_path,
-                        start_line=start_line,
-                        end_line=end_line,
-                        parent=item.name,
-                    )
-
-                    definitions.append(
-                        ParsedDefinition(
-                            node=method_node,
-                            ast_node=child,
-                            class_name=item.name,
-                        )
-                    )
-
-    return definitions
-
-
-def _get_name_from_call_func(func: ast.AST) -> Optional[str]:
-    if isinstance(func, ast.Name):
-        return func.id
-
-    if isinstance(func, ast.Attribute):
-        return func.attr
-
-    return None
-
-
-def _collect_local_instance_types(
-    function_node: ast.AST,
-    class_names: Set[str],
-) -> Dict[str, str]:
-    """Infer simple local variable to class mappings inside one function."""
-    local_types: Dict[str, str] = {}
-
-    for node in ast.walk(function_node):
-        if not isinstance(node, ast.Assign):
-            continue
-
-        if not isinstance(node.value, ast.Call):
-            continue
-
-        class_name = _get_name_from_call_func(node.value.func)
-
-        if class_name not in class_names:
-            continue
-
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                local_types[target.id] = class_name
-
-    return local_types
-
-
-def _resolve_call_symbol(
-    func: ast.AST,
-    local_types: Dict[str, str],
-    current_class: Optional[str],
-) -> Optional[str]:
-    if isinstance(func, ast.Name):
-        return func.id
-
-    if isinstance(func, ast.Attribute):
-        attr = func.attr
-
-        if isinstance(func.value, ast.Name):
-            object_name = func.value.id
-
-            if object_name in local_types:
-                return f"{local_types[object_name]}.{attr}"
-
-            if object_name == "self" and current_class:
-                return f"{current_class}.{attr}"
-
-        return attr
-
-    return None
-
-
-def _resolve_target_node_ids(
-    graph: CodeGraph,
-    call_symbol: str,
-) -> List[str]:
-    if call_symbol in graph.qualified_name_to_id:
-        return [graph.qualified_name_to_id[call_symbol]]
-
-    if call_symbol in graph.name_to_ids:
-        return graph.name_to_ids[call_symbol]
-
-    matches = []
-
-    for node in graph.nodes.values():
-        if node.qualified_name.endswith(call_symbol):
-            matches.append(node.node_id)
-
-    return matches
+    def restore_analysis(self, snapshot: dict) -> None:
+        self.analysis_version = snapshot.get("version", 0)
+        for key in ("unresolved_calls", "diagnostics", "runtime_runs"):
+            setattr(self, key, snapshot.get(key, []))
+        self.node_info = snapshot.get("node_info", {})
+        self.source_hashes = snapshot.get("source_hashes", {})
+        for item in snapshot.get("edges", []):
+            if item["source_id"] in self.nodes and item["target_id"] in self.nodes:
+                self.add_edge(**item)
 
 
 def build_code_graph(repo_path: str | Path) -> CodeGraph:
-    """Build a lightweight AST code graph for one repository."""
-    repo_root = Path(repo_path).resolve()
-    python_files = scan_python_files(repo_root)
-
-    graph = CodeGraph()
-    all_definitions: List[ParsedDefinition] = []
-
-    for file_path in python_files:
-        try:
-            definitions = _collect_definitions_for_file(file_path, repo_root)
-        except SyntaxError:
-            continue
-
-        for definition in definitions:
-            graph.add_node(definition.node)
-
-        all_definitions.extend(definitions)
-
-    for definition in all_definitions:
-        node = definition.node
-
-        if not node.parent:
-            continue
-
-        parent_nodes = graph.find_nodes(node.parent)
-
-        for parent in parent_nodes:
-            if (
-                parent.relative_path == node.relative_path
-                and parent.node_type == "class"
-            ):
-                graph.add_edge(
-                    source_id=parent.node_id,
-                    target_id=node.node_id,
-                    edge_type="contains",
-                )
-
-    class_names = {
-        node.name
-        for node in graph.nodes.values()
-        if node.node_type == "class"
-    }
-
-    for definition in all_definitions:
-        source_node = definition.node
-
-        if source_node.node_type not in {"function", "method"}:
-            continue
-
-        function_node = definition.ast_node
-        local_types = _collect_local_instance_types(
-            function_node=function_node,
-            class_names=class_names,
-        )
-
-        for ast_node in ast.walk(function_node):
-            if not isinstance(ast_node, ast.Call):
-                continue
-
-            call_symbol = _resolve_call_symbol(
-                func=ast_node.func,
-                local_types=local_types,
-                current_class=definition.class_name,
-            )
-
-            if not call_symbol:
-                continue
-
-            target_node_ids = _resolve_target_node_ids(graph, call_symbol)
-
-            for target_node_id in target_node_ids:
-                graph.add_edge(
-                    source_id=source_node.node_id,
-                    target_id=target_node_id,
-                    edge_type="calls",
-                )
-
-    return graph
+    """Build scoped static relationships without importing/executing the repo."""
+    from src.graph.static_analysis import build_from_sources
+    root = Path(repo_path).resolve()
+    sources = {path.resolve().relative_to(root).as_posix():
+               path.read_text(encoding="utf-8", errors="replace")
+               for path in scan_python_files(root)}
+    return build_from_sources(sources)

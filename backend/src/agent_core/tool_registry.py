@@ -30,7 +30,11 @@ class ReadArgs(Arguments):
     end_line: int | None = Field(default=None, ge=1)
 
 
-class GraphArgs(SymbolArgs):
+class CallArgs(SymbolArgs):
+    evidence: Literal["all", "static", "observed"] = "all"
+
+
+class GraphArgs(CallArgs):
     max_depth: int = Field(default=3, ge=1, le=5)
 
 
@@ -72,10 +76,10 @@ SPECS = {
     "find_definitions": ToolSpec(SymbolArgs, "Find definitions of an explicit function/class/method name."),
     "read_file": ToolSpec(ReadArgs, "Read original indexed file lines from the database, up to 80 lines per call. Never reads the local filesystem."),
     "find_references": ToolSpec(ReferenceArgs, "Find lexical usages of a symbol in indexed Python source."),
-    "find_callers": ToolSpec(SymbolArgs, "Find direct callers in the static code graph. Disambiguate with node_id or path::qualified_name."),
-    "find_callees": ToolSpec(SymbolArgs, "Find direct callees in the static code graph. Results are approximate."),
-    "impact_analysis": ToolSpec(GraphArgs, "Find transitive callers potentially affected by a change, to a bounded depth."),
-    "trace_flow": ToolSpec(GraphArgs, "Explore bounded static call relationships starting at a symbol. This does not prove runtime order."),
+    "find_callers": ToolSpec(CallArgs, "Find callers with call sites and static/observed evidence. Use evidence=observed for imported runtime runs only. Disambiguate with node_id or path::qualified_name."),
+    "find_callees": ToolSpec(CallArgs, "Find callees, unresolved dynamic calls, and static/observed evidence. Static calls do not prove execution."),
+    "impact_analysis": ToolSpec(GraphArgs, "Find potentially affected callers, dependency paths and test candidates. Neither static nor observed dependencies prove that a change breaks behavior."),
+    "trace_flow": ToolSpec(GraphArgs, "Explore call relationships with static/observed filters. This is not an execution timeline; observations cover recorded runs only."),
     "count_symbols": ToolSpec(CountSymbolsArgs, "Count indexed graph functions/classes/methods exactly."),
     "count_files": ToolSpec(CountFilesArgs, "List and count indexed files. Counts cover supported indexed formats only."),
     "finish_answer": ToolSpec(FinishArgs, "Finish in the user's language. Select only evidence IDs returned by tools. Use insufficient_evidence when unable to verify the answer."),

@@ -1,6 +1,6 @@
 # Agentic Python Repo RAG Copilot
 
-An AI agent for exploring Python repositories through questions, source citations, and a static code graph. It combines hybrid retrieval with an OpenAI tool loop to investigate code across files.
+An AI agent for exploring Python repositories through questions and source citations. It combines hybrid retrieval, a bounded OpenAI tool loop, and a static call graph with optional runtime evidence to investigate code across files.
 
 ## Demo
 
@@ -15,13 +15,14 @@ An AI agent for exploring Python repositories through questions, source citation
 
 ![Earlier Supabase table view](./docs/images/supabase-db.jpg)
 
-*Earlier database snapshot. The current schema also stores original indexed files in `repository_files`.*
+*Earlier database snapshot. The current schema also stores original indexed files in `repository_files` and graph evidence in `repository_graph_analysis`.*
 
 </details>
 
 ## What it does
 
-- **Investigates code:** finds definitions, reads source, finds references, and explores callers, callees, and potential change impact.
+- **Investigates code:** finds definitions, reads source, finds references, and explores callers, callees, and potential impact with call-site evidence and unresolved-call reporting.
+- **Separates static and runtime evidence:** optionally imports source-version-checked traces from trusted local runs; tools filter static candidates or observed calls.
 - **Chooses its next action:** OpenAI observes tool results and continues until it submits an answer or reaches a run limit.
 - **Combines retrieval methods:** vector search, BM25, and symbol matching with Reciprocal Rank Fusion (RRF); documentation queries add a documentation ranking.
 - **Offers two retrieval modes:** Fast uses fused rankings; Accurate adds Cross-Encoder reranking.
@@ -41,6 +42,8 @@ flowchart TB
     subgraph Indexing
         Repo["Repository files"] --> Parse["Parse, chunk, embed and build static graph"]
         Parse --> Store[("PostgreSQL + pgvector<br/>Chunks, embeddings, graph and original files")]
+        Run["Optional trusted local run"] --> Trace["Record calls + verify source hashes"]
+        Trace --> Store
     end
 
     subgraph Chat
@@ -65,11 +68,13 @@ Source repositories are read during indexing. Chat uses indexed PostgreSQL data 
 | Storage | Supabase/PostgreSQL, pgvector, SQLAlchemy |
 | Retrieval | `all-MiniLM-L6-v2` (384 dimensions), rank-bm25, symbol/documentation search, RRF |
 | Reranking | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| Code graph | Python AST nodes and static call relationships |
+| Code graph | Scoped AST call candidates, call-site evidence, optional runtime observations |
 
 ## Quick start
 
-Requires Docker Compose, a PostgreSQL database with pgvector support, and an OpenAI API key with access to the configured model. The Docker image uses Python 3.10.
+Already have the local environment and indexed samples? Follow [the two-terminal local startup](./docs/running.md#existing-local-environment). Keep both servers running while using http://localhost:5173; an API key alone does not start them.
+
+For a fresh Docker setup, the steps below require Docker Compose, PostgreSQL with pgvector support, and an OpenAI API key with access to the configured model. The Docker image uses Python 3.10.
 
 **1. Configure the backend** from the repository root:
 
@@ -86,6 +91,7 @@ Edit `backend/.env` using [the template](./backend/.env.example):
 | `OPENAI_API_KEY` | Your OpenAI API key |
 | `LLM_BACKEND` | `openai` |
 | `OPENAI_MODEL` | `gpt-6-luna` (the project's selected model) |
+| `OPENAI_REASONING_EFFORT` / `AGENT_MODE` | `low` / `loop` |
 
 The backend uses PostgreSQL directly; Supabase REST credentials are not required for this path. Keep credentials out of source control.
 
@@ -114,7 +120,7 @@ For an existing local environment, VS Code tasks, Streamlit, local PostgreSQL, d
 
 ## Evaluation and baseline
 
-**Current validation:** 46 offline tests passed in the latest local check. Live smoke checks also covered source-grounded answers, a follow-up question, and semantic retrieval across the two bundled sample repositories. These checks are not a full benchmark.
+**Validation on 2026-11-14:** 76 offline tests passed, including static-call resolution, runtime evidence and target-package isolation. Live checks on both samples covered six API questions, follow-up/repo-switch history, source ranges, imported runtime traces and an additional browser-rendered answer. These are functional smoke checks, not a full benchmark.
 
 **Historical reference baseline:** the earlier DeepSeek workflow reported 100 cases across five repositories:
 
@@ -145,16 +151,19 @@ The runner supports `--agent-mode workflow` versus `--agent-mode loop` with the 
 
 ## Scope and limitations
 
-- This is a **read-only code investigation agent**; it does not edit code or execute repository programs.
-- Structural analysis targets Python. Dynamic calls and complex dispatch may be missed; static flow and impact results describe possible relationships.
+- This is a **read-only code investigation agent**. Chat/indexing do not edit or execute repository programs; the separate runtime recording CLI executes only the trusted program you explicitly select.
+- Structural analysis targets Python. Static flow and impact describe possible relationships; optional runtime traces cover recorded runs only. Neither proves that an edit causes a failure.
 - Source validation checks paths and line ranges, not the correctness of every statement in an answer.
 - Sessions and bounded conversation history are in memory; API restarts clear them.
 - Defaults limit each question to 8 model turns, 16 tool calls, 90 seconds, and bounded context. Accurate mode adds model loading and reranking overhead.
-- Full evaluation on larger repos and multi-user production hardening remain future work.
+- Large repositories have not been benchmarked. Indexing holds source/chunks/embeddings in memory and waits within the HTTP request; background jobs, progress reporting and incremental indexing are not implemented. See [indexing limits](./docs/running.md#indexing-limits).
+- Multi-user production hardening remains future work.
 
 ## Further reading
 
 - [Agent design, tools, limits, and upgrade guide](./docs/agent-upgrade.md)
+- [Static call graph, runtime evidence, and graph upgrade commands](./docs/call-graph.md)
 - [Evaluation, historical charts, and baseline comparison](./docs/evaluation.md)
 - [Running locally, Docker options, and deployment](./docs/running.md)
+- [Publish these changes to GitHub](./docs/github.md)
 - [Environment template](./backend/.env.example) · [Sample repositories](./company_repos)

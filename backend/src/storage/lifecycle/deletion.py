@@ -9,13 +9,17 @@ from sqlalchemy import delete, inspect
 
 from src.core.config import RUNTIME_DIR
 from src.db.models import Chunk, ChunkEmbedding, CodeEdge, CodeNode, Repository, RepositoryFile
+from src.db.models import RepositoryGraphAnalysis
 from src.db.session import engine, get_db_session
 from src.storage.lifecycle.models import is_temporary_repository
 from src.storage.lifecycle.queries import get_repository_snapshot
 
 def delete_postgres_rows_for_repo(repo_id: str) -> None:
     has_snapshots = inspect(engine).has_table("repository_files")
+    has_graph_analysis = inspect(engine).has_table("repository_graph_analysis")
     with get_db_session() as session:
+        if has_graph_analysis:
+            session.execute(delete(RepositoryGraphAnalysis).where(RepositoryGraphAnalysis.repo_id == repo_id))
         if has_snapshots:
             session.execute(delete(RepositoryFile).where(RepositoryFile.repo_id == repo_id))
         session.execute(delete(ChunkEmbedding).where(ChunkEmbedding.repo_id == repo_id))

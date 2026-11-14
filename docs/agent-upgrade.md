@@ -1,11 +1,13 @@
 # OpenAI repository agent
 
+[Back to README](../README.md)
+
 The project uses OpenAI GPT-6 Luna. Set `OPENAI_API_KEY`,
 `OPENAI_MODEL=gpt-6-luna`, and `LLM_BACKEND=openai`.
 Credentials belong in `backend/.env` or the deployment's secret environment,
 never in source control.
 
-Paste the key directly after `OPENAI_API_KEY=` in `backend/.env` (line 2).
+Paste the key directly after `OPENAI_API_KEY=` in `backend/.env`.
 The selected model is `gpt-6-luna`, using the OpenAI Responses API with
 `OPENAI_REASONING_EFFORT=low`. Model access depends on the API account.
 
@@ -13,13 +15,18 @@ The selected model is `gpt-6-luna`, using the OpenAI Responses API with
 
 1. Install backend dependencies from [requirements](../backend/requirements.txt).
 2. Update your environment from [the example](../backend/.env.example).
-3. From `backend/`, run `python -m scripts.init_db` to add the
-   `repository_files` table. This is an additive schema change.
-4. Re-index company repositories, for example:
+3. From `backend/`, run `python -m scripts.init_db` to create missing tables,
+   including `repository_files` and `repository_graph_analysis`. This adds tables;
+   it does not restore deleted data or migrate arbitrary existing column changes.
+4. If source snapshots are missing or the source changed, re-index company repositories:
    `python -m scripts.index_company_repo taskflow_api` and
    `python -m scripts.index_company_repo inventory_api`.
    These commands replace the repository's old index in the configured DB.
-5. Restart the API and load a repository into a new session.
+   If snapshots already exist and only the graph needs upgrading, use
+   `python -m scripts.refresh_code_graph taskflow_api` (and the corresponding
+   command for `inventory_api`) instead. This keeps embeddings and clears imported
+   runtime observations; see [the graph guide](./call-graph.md).
+5. Restart the API after code/configuration changes and load a repository into a new session.
 
 Old indexes can still load. If original source snapshots are absent, the API
 returns a re-index warning; source reads use legacy chunk reconstruction and may
@@ -49,6 +56,11 @@ Unknown IDs and unsupported source-free completion are rejected. Count queries
 may complete with an exact tool count and no source IDs, including a zero count.
 Source validation checks indexed paths and ranges; it cannot prove that every
 sentence follows from the sources. Static graph relationships remain approximate.
+
+Graph tools now expose static/observed evidence filters, unresolved call sites,
+potential impact paths and test candidates. Existing graph indexes should be
+refreshed from DB snapshots; [the call graph guide](./call-graph.md) describes the
+additive storage change and opt-in runtime recording/import workflow.
 
 If OpenAI is disabled or cannot be constructed, the previous deterministic
 workflow is used and missing configuration is reported. If OpenAI fails mid-run,

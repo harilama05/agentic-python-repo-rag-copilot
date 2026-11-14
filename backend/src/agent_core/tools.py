@@ -475,7 +475,30 @@ class CodebaseTools:
 
         return self._find_references_in_db(patterns, short_symbol, include_definition, symbol_name, max_results)
 
-    def find_callers(self, symbol_name: str) -> Dict[str, Any]:
+    def _graph_evidence(self, node_ids: set[str], evidence: str = "all") -> dict:
+        graph = self.code_graph
+        return {
+            "analysis_kind": "hybrid" if graph.runtime_runs else "static",
+            "evidence_filter": evidence, "analysis_version": graph.analysis_version,
+            "proves_execution": False, "proves_breakage": False,
+            "interpretation": "Static edges are possible calls. Observed edges occurred only in the imported runs. Absence is not proof of unreachability; impact is not proof of a regression.",
+            "unresolved_calls": [call for call in graph.unresolved_calls if call["source_id"] in node_ids][:30],
+            "diagnostics": graph.diagnostics[:20],
+            "definition_context": [{"node_id": node_id, **graph.node_info[node_id]}
+                                   for node_id in sorted(node_ids)[:10] if node_id in graph.node_info],
+            "runtime_runs": [{key: value for key, value in run.items() if key not in {"digest", "observed_nodes"}}
+                             for run in graph.runtime_runs[-10:]],
+            "warnings": (["Legacy graph has no call-site evidence. Refresh the graph from indexed snapshots."]
+                         if graph.analysis_version < 2 else []),
+        }
+
+    @staticmethod
+    def _graph_relationship(edge) -> dict:
+        return {"caller": edge.source_id, "callee": edge.target_id,
+                "certainty": edge.certainty, "sites": edge.sites,
+                "runtime_observed": bool(edge.observations), "observations": edge.observations}
+
+    def find_callers(self, symbol_name: str, evidence: str = "all") -> Dict[str, Any]:
         """Find functions or methods that call the given symbol."""
         candidates = self.resolve_graph_symbols(symbol_name)
 
@@ -484,8 +507,14 @@ class CodebaseTools:
 
         resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
         result = self.code_graph.find_callers(candidates[0].node_id if candidates else symbol_name)
+        target_ids = {node.node_id for node in result["targets"]}
+        edges = [edge for edge in self.code_graph.call_edges(evidence) if edge.target_id in target_ids]
+        caller_ids = {edge.source_id for edge in edges}
+        result["callers"] = [self.code_graph.nodes[n] for n in sorted(caller_ids)]
 
         return {
+            **self._graph_evidence(target_ids | caller_ids, evidence),
+            "relationships": [self._graph_relationship(edge) for edge in edges],
             "symbol": symbol_name,
             "resolved_symbol": resolved_symbol,
             "ambiguous": False,
@@ -499,7 +528,7 @@ class CodebaseTools:
             ],
         }
 
-    def find_callees(self, symbol_name: str) -> Dict[str, Any]:
+    def find_callees(self, symbol_name: str, evidence: str = "all") -> Dict[str, Any]:
         """Find functions or methods called by the given symbol."""
         candidates = self.resolve_graph_symbols(symbol_name)
 
@@ -508,8 +537,14 @@ class CodebaseTools:
 
         resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
         result = self.code_graph.find_callees(candidates[0].node_id if candidates else symbol_name)
+        source_ids = {node.node_id for node in result["sources"]}
+        edges = [edge for edge in self.code_graph.call_edges(evidence) if edge.source_id in source_ids]
+        callee_ids = {edge.target_id for edge in edges}
+        result["callees"] = [self.code_graph.nodes[n] for n in sorted(callee_ids)]
 
         return {
+            **self._graph_evidence(source_ids | callee_ids, evidence),
+            "relationships": [self._graph_relationship(edge) for edge in edges],
             "symbol": symbol_name,
             "resolved_symbol": resolved_symbol,
             "ambiguous": False,
@@ -523,7 +558,7 @@ class CodebaseTools:
             ],
         }
 
-    def impact_analysis(self, symbol_name: str, max_depth: int = 2) -> Dict[str, Any]:
+    def impact_analysis(self, symbol_name: str, max_depth: int = 2, evidence: str = "all") -> Dict[str, Any]:
         """Find code nodes that may be affected if a symbol changes."""
         candidates = self.resolve_graph_symbols(symbol_name)
 
@@ -531,12 +566,43 @@ class CodebaseTools:
             return self._build_ambiguous_symbol_response(symbol_name, candidates)
 
         resolved_symbol = candidates[0].qualified_name if candidates else symbol_name
-        result = self.code_graph.impact_analysis(
-            symbol=candidates[0].node_id if candidates else symbol_name,
-            max_depth=max_depth,
-        )
+        graph = self.code_graph
+        targets = candidates or graph.find_nodes(symbol_name)
+        target_ids = {node.node_id for node in targets}
+        paths = {node_id: [node_id] for node_id in target_ids}
+        queue = [(node_id, 0) for node_id in sorted(target_ids)]
+        incoming = {}
+        for edge in graph.call_edges(evidence):
+            incoming.setdefault(edge.target_id, []).append(edge)
+        relationships = []
+        depth_limited = False
+        node_limited = False
+        while queue and len(paths) < 200:
+            node_id, depth = queue.pop(0)
+            if depth >= max_depth:
+                depth_limited |= bool(incoming.get(node_id))
+                continue
+            for edge in incoming.get(node_id, []):
+                if len(relationships) >= 400:
+                    node_limited = True
+                    break
+                relationships.append(self._graph_relationship(edge))
+                if edge.source_id not in paths:
+                    if len(paths) >= 200:
+                        node_limited = True
+                        continue
+                    paths[edge.source_id] = [edge.source_id, *paths[node_id]]
+                    queue.append((edge.source_id, depth + 1))
+        affected = [graph.nodes[node_id] for node_id in sorted(set(paths) - target_ids)]
+        result = {"targets": targets, "affected": affected}
 
         return {
+            **self._graph_evidence(set(paths), evidence),
+            "relationships": relationships,
+            "impact_paths": [{"node_id": n.node_id, "path_to_target": paths[n.node_id]} for n in affected],
+            "tests_to_review": [format_graph_node(n, "test_candidate") for n in affected
+                                if n.name.startswith("test_") or "tests" in n.relative_path.split("/")],
+            "truncated": bool(queue) or depth_limited or node_limited, "max_depth": max_depth,
             "symbol": symbol_name,
             "resolved_symbol": resolved_symbol,
             "ambiguous": False,
@@ -586,30 +652,39 @@ class CodebaseTools:
             ],
         }
 
-    def trace_flow(self, symbol_name: str, max_depth: int = 3) -> Dict[str, Any]:
+    def trace_flow(self, symbol_name: str, max_depth: int = 3, evidence: str = "all") -> Dict[str, Any]:
         """Return bounded static call relationships, not a runtime execution order."""
         candidates = self.resolve_graph_symbols(symbol_name)
         if len(candidates) > 1:
             return self._build_ambiguous_symbol_response(symbol_name, candidates)
         if not candidates:
-            return {"nodes": [], "edges": [], "static_analysis": True}
+            return {"nodes": [], "edges": [], "static_analysis": True, **self._graph_evidence(set(), evidence)}
+        allowed = {(e.source_id, e.target_id) for e in self.code_graph.call_edges(evidence)}
         visited = set()
         queue = [(candidates[0].node_id, 0)]
         edges = []
+        depth_limited = False
+        edge_limited = False
         while queue and len(visited) < 100:
             node_id, depth = queue.pop(0)
             if node_id in visited:
                 continue
             visited.add(node_id)
             if depth >= max_depth:
+                depth_limited |= any((e.source_id, e.target_id) in allowed
+                                     for e in self.code_graph.outgoing.get(node_id, []))
                 continue
             for edge in self.code_graph.outgoing.get(node_id, []):
-                if edge.edge_type == "calls":
-                    edges.append({"caller": edge.source_id, "callee": edge.target_id})
+                if edge.edge_type == "calls" and (edge.source_id, edge.target_id) in allowed:
+                    if len(edges) >= 400:
+                        edge_limited = True
+                        break
+                    edges.append(self._graph_relationship(edge))
                     queue.append((edge.target_id, depth + 1))
         return {"nodes": [format_graph_node(self.code_graph.nodes[node_id]) for node_id in sorted(visited)],
-                "edges": edges, "static_analysis": True,
-                "truncated": bool(queue), "max_depth": max_depth}
+                "edges": edges, "static_analysis": evidence != "observed",
+                **self._graph_evidence(visited, evidence),
+                "truncated": bool(queue) or depth_limited or edge_limited, "max_depth": max_depth}
 
     def count_files(self, file_type: str = "python") -> Dict[str, Any]:
         """Count and list files in the repository by type.

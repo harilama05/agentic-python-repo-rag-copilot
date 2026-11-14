@@ -34,6 +34,9 @@ Rules:
 13. Keep the answer concise but useful.
 14. When answering questions about project structure, modules, or functions, extract relevant facts from ALL provided context including README content, documentation, and code excerpts. Do not dismiss documentation content as insufficient.
 15. If source_excerpts contain README or documentation content that describes project modules, functions, or architecture, use that information to answer the question.
+16. Static graph edges are possible calls, not proof of runtime execution. Imported observations cover only their recorded runs. Missing edges do not prove impossibility.
+17. Impact paths indicate potential dependencies, not proof that an edit introduces a failure. Require a reproducing test and baseline comparison for that claim.
+18. Read implementations and relevant tests for business meaning. Names, annotations, docstrings and call relationships alone are insufficient to establish full behavior. Report unresolved calls and incomplete evidence even when some results are present.
 """
 
 
@@ -181,6 +184,6 @@ Your answer must:
 - explain the relevant code, documentation, or graph relationship clearly
 - not include inline citations
 - rely only on raw_results, graph_result, and source_excerpts
-- mention uncertainty only if the relevant raw result list is empty
+- preserve uncertainty from static candidates, unresolved calls, limited runtime runs and incomplete evidence, even when result lists are non-empty
 - extract and use facts from documentation (README, notes, etc.) when available
 """

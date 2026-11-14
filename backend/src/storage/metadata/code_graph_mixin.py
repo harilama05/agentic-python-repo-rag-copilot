@@ -1,9 +1,10 @@
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect, select
 
 from src.db.models import CodeEdge as DBCodeEdge, CodeNode as DBCodeNode
-from src.db.session import get_db_session
+from src.db.session import engine, get_db_session
+from src.db.models import RepositoryGraphAnalysis
 from src.graph.code_graph import CodeGraph, CodeNode as GraphCodeNode
 
 
@@ -14,6 +15,7 @@ class CodeGraphStoreMixin:
         repo_id: str,
         code_graph: Any,
     ) -> None:
+        RepositoryGraphAnalysis.__table__.create(bind=engine, checkfirst=True)
         with get_db_session() as session:
             session.execute(
                 delete(DBCodeEdge).where(DBCodeEdge.repo_id == repo_id)
@@ -62,6 +64,21 @@ class CodeGraphStoreMixin:
 
             session.add_all(node_rows)
             session.add_all(edge_rows)
+            row = session.get(RepositoryGraphAnalysis, repo_id)
+            if row is None:
+                session.add(RepositoryGraphAnalysis(repo_id=repo_id, payload=code_graph.analysis_snapshot()))
+            else:
+                row.payload = code_graph.analysis_snapshot()
+
+    def save_graph_analysis(self, repo_id: str, graph: CodeGraph) -> None:
+        """Persist imported runtime evidence without replacing static node rows."""
+        RepositoryGraphAnalysis.__table__.create(bind=engine, checkfirst=True)
+        with get_db_session() as session:
+            row = session.get(RepositoryGraphAnalysis, repo_id)
+            if row is None:
+                session.add(RepositoryGraphAnalysis(repo_id=repo_id, payload=graph.analysis_snapshot()))
+            else:
+                row.payload = graph.analysis_snapshot()
 
     def count_code_nodes(self, repo_id: str) -> int:
         with get_db_session() as session:
@@ -80,6 +97,7 @@ class CodeGraphStoreMixin:
             return len(result)
 
     def load_code_graph(self, repo_id: str) -> CodeGraph:
+        has_analysis = inspect(engine).has_table("repository_graph_analysis")
         with get_db_session() as session:
             node_rows = session.execute(
                 select(DBCodeNode).where(DBCodeNode.repo_id == repo_id)
@@ -111,5 +129,10 @@ class CodeGraphStoreMixin:
                     target_id=row.target_node_id,
                     edge_type=row.edge_type,
                 )
+
+            if has_analysis:
+                analysis = session.get(RepositoryGraphAnalysis, repo_id)
+                if analysis:
+                    graph.restore_analysis(analysis.payload)
 
             return graph
